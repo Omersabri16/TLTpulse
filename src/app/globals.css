@@ -1,0 +1,160 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-dm-sans);
+  --font-heading: var(--font-dm-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+
+  /* TLTpulse renkleri */
+  --color-navy: var(--navy);
+  --color-navy-2: var(--navy-2);
+  --color-navy-line: var(--navy-line);
+  --color-on-navy: var(--on-navy);
+  --color-on-navy-muted: var(--on-navy-muted);
+  --color-cyan: var(--cyan);
+  --color-cyan-ink: var(--cyan-ink);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-lav: var(--lav);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --radius: 1rem;
+  --background: #f4f4f6;
+  --foreground: #16163a;
+  --card: #ffffff;
+  --card-foreground: #16163a;
+  --popover: #ffffff;
+  --popover-foreground: #16163a;
+  --primary: #5249d0;
+  --primary-foreground: #ffffff;
+  --secondary: #e4e1fb;
+  --secondary-foreground: #3b33b0;
+  --muted: #eeeef4;
+  --muted-foreground: #626280;
+  --accent: #ecebfb;
+  --accent-foreground: #16163a;
+  --destructive: #d23b2f;
+  --border: #e4e4ee;
+  --input: #dcdce8;
+  --ring: #5249d0;
+  --chart-1: #1aa7ec;
+  --chart-2: #5249d0;
+
+  --navy: #16165c;
+  --navy-2: #1f1f72;
+  --navy-line: #2c2c84;
+  --on-navy: #ffffff;
+  --on-navy-muted: #cfcdfb;
+  --cyan: #1aa7ec;
+  --cyan-ink: #0a6aa8;
+  --ok: #17845a;
+  --ok-bg: #dcf6e8;
+  --warn: #a35a00;
+  --warn-bg: #fff1d9;
+  --lav: #e4e1fb;
+}
+
+.dark {
+  --background: #0b0b29;
+  --foreground: #ececff;
+  --card: #14143c;
+  --card-foreground: #ececff;
+  --popover: #17174a;
+  --popover-foreground: #ececff;
+  --primary: #7a71ff;
+  --primary-foreground: #ffffff;
+  --secondary: #26246e;
+  --secondary-foreground: #d9d5ff;
+  --muted: #1b1b4a;
+  --muted-foreground: #a7a7cc;
+  --accent: #222260;
+  --accent-foreground: #ececff;
+  --destructive: #ff6b5e;
+  --border: #25255c;
+  --input: #2d2d6c;
+  --ring: #7a71ff;
+  --chart-1: #3cc0ff;
+  --chart-2: #7a71ff;
+
+  --navy: #08081f;
+  --navy-2: #13133a;
+  --navy-line: #1f1f52;
+  --on-navy: #ffffff;
+  --on-navy-muted: #b9b6f0;
+  --cyan: #3cc0ff;
+  --cyan-ink: #5ccaff;
+  --ok: #3ddc97;
+  --ok-bg: #0f3a2a;
+  --warn: #ffc266;
+  --warn-bg: #3a2a0c;
+  --lav: #26246e;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Başlıkta vurgulanan kelime: kesikli camgöbeği çerçeve (sayfa başına bir tane) */
+.hl {
+  display: inline-block;
+  border: 1px dashed var(--cyan);
+  border-radius: 10px;
+  padding: 0 0.18em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
