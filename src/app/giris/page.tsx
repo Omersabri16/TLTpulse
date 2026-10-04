@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { AuthCard, GoogleButton } from "@/components/auth-card";
 import { btn, inputClass } from "@/lib/btn";
+import { safeNext } from "@/lib/safe";
 import { useApp } from "@/lib/store";
 
 function LoginForm() {
@@ -17,7 +18,7 @@ function LoginForm() {
 
   const go = () => {
     login(email);
-    router.push(next.startsWith("/") ? next : "/profil");
+    router.push(safeNext(next));
   };
 
   return (

@@ -10,6 +10,7 @@ import { Modal } from "@/components/modal";
 import { Container, PageHero, PageShell, Pill, Segmented } from "@/components/page-shell";
 import { btn, inputClass } from "@/lib/btn";
 import { fmtDate } from "@/lib/competitions";
+import { safeHref } from "@/lib/safe";
 import { DIFFICULTY_POINTS, levelLabel, QUALITY_POINTS } from "@/lib/score";
 import { useApp, useMyScore } from "@/lib/store";
 import type { Project } from "@/lib/types";
@@ -83,8 +84,8 @@ function ProjectDetail({ project, onClose }: { project: Project | null; onClose:
             <Trash2 /> Kaldır
           </button>
           <div className="flex gap-2">
-            {project.demoUrl && (
-              <a href={project.demoUrl} target="_blank" rel="noreferrer" className={btn("outline")}>
+            {safeHref(project.demoUrl) && (
+              <a href={safeHref(project.demoUrl)} target="_blank" rel="noreferrer" className={btn("outline")}>
                 Demo <ExternalLink />
               </a>
             )}

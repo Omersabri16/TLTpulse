@@ -9,6 +9,7 @@ import { TagInput } from "@/components/tag-input";
 import { btn, inputClass } from "@/lib/btn";
 import { celebrateIfLevelUp } from "@/lib/celebrate";
 import { analyzeProject, parseRepoUrl, type AnalyzeResult } from "@/lib/score";
+import { isHttpUrl } from "@/lib/safe";
 import { useApp, useMyScore } from "@/lib/store";
 import type { ProjectAnalysis } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
     if (!name.trim()) return setErr("Proje adını yaz.");
     if (description.trim().length < 15) return setErr("Projeyi bir cümleyle anlat (en az 15 karakter).");
     if (!techs.length) return setErr("En az bir teknoloji ekle.");
+    if (demoUrl.trim() && !isHttpUrl(demoUrl)) return setErr("Demo linki https:// ile başlamalı.");
     setErr("");
     setStage(0);
     setResult(analyzeProject({ repoUrl: url, techs, role, checks: { ...checks, demo: !!demoUrl.trim() }, githubUser: profile?.github ?? "" }));

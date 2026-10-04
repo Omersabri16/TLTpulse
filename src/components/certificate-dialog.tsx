@@ -7,6 +7,7 @@ import { Choice, Field, Modal } from "@/components/modal";
 import { btn, inputClass } from "@/lib/btn";
 import { celebrateIfLevelUp } from "@/lib/celebrate";
 import { verifyCertificate } from "@/lib/score";
+import { isHttpUrl } from "@/lib/safe";
 import { useApp, useMyScore } from "@/lib/store";
 import type { CertProvider, CertStatus } from "@/lib/types";
 
@@ -43,6 +44,7 @@ function CertificateBody({ onOpenChange }: { onOpenChange: (o: boolean) => void 
   const check = () => {
     if (!name.trim()) return setErr("Sertifikanın adını yaz.");
     if (!link.trim()) return setErr("Sertifika linkini yapıştır.");
+    if (!isHttpUrl(link)) return setErr("Link https:// ile başlamalı.");
     setErr("");
     setRes(verifyCertificate(provider, link, nameOnCert, profile?.name ?? ""));
     setPhase("checking");

@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { PulseLine, UserAvatar } from "@/components/brand";
 import { Card, Pill } from "@/components/page-shell";
 import { btn } from "@/lib/btn";
+import { safeHref } from "@/lib/safe";
 import { levelLabel } from "@/lib/score";
 import type { Certificate, Difficulty, Education, Experience, Level, Quality, Reference, Skill } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -264,9 +265,13 @@ export function ProfileView({
                   {data.certs.map((c) => (
                     <li key={c.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                       <div className="min-w-0">
-                        <a href={c.link} target="_blank" rel="noreferrer" className="font-semibold hover:underline">
-                          {c.name}
-                        </a>
+                        {safeHref(c.link) ? (
+                          <a href={safeHref(c.link)} target="_blank" rel="noreferrer" className="font-semibold hover:underline">
+                            {c.name}
+                          </a>
+                        ) : (
+                          <b className="font-semibold">{c.name}</b>
+                        )}
                         <p className="text-sm text-muted-foreground">
                           {c.provider} · {c.date}
                         </p>
