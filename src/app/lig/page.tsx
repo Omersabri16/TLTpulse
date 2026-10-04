@@ -10,7 +10,7 @@ import { Container, PageHero, PageShell, Segmented } from "@/components/page-she
 import { btn, inputClass } from "@/lib/btn";
 import { leagueRows, levelOf } from "@/lib/score";
 import { useApp, useHydrated, useMyScore } from "@/lib/store";
-import { FIELDS, type Field, type Level } from "@/lib/types";
+import type { Field, Level } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function League() {
@@ -24,7 +24,6 @@ function League() {
   const [levelChoice, setLevel] = useState<Level | null>(null);
   // Seçim yapılana kadar giriş yapan kendi liginde, misafir Orta ligde başlar.
   const level = levelChoice ?? (member ? score.level : "Orta");
-  const [field, setField] = useState<Field | "">("");
   const [q, setQ] = useState("");
   const [gate, setGate] = useState(false);
 
@@ -36,9 +35,8 @@ function League() {
     const t = q.toLocaleLowerCase("tr");
     return leagueRows(me)
       .filter((r) => levelOf(r.score) === level)
-      .filter((r) => !field || r.field === field)
       .filter((r) => !t || r.name.toLocaleLowerCase("tr").includes(t));
-  }, [member, profile, score.total, level, field, q]);
+  }, [member, profile, score.total, level, q]);
 
   const open = (username: string, me?: boolean) => {
     if (!member) return setGate(true);
@@ -86,25 +84,16 @@ function League() {
               { value: "Kıdemli", label: "Kıdemli" },
             ]}
           />
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <select className={cn(inputClass, "rounded-full sm:w-44")} value={field} onChange={(e) => setField(e.target.value as Field | "")} aria-label="Alan">
-              <option value="">Tüm alanlar</option>
-              {FIELDS.map((f) => (
-                <option key={f}>{f}</option>
-              ))}
-            </select>
-            <div className="relative sm:w-60">
-              <Search className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input className={cn(inputClass, "rounded-full pl-10")} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Yazılımcı ara" />
-            </div>
+          <div className="relative sm:w-60">
+            <Search className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input className={cn(inputClass, "rounded-full pl-10")} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Yazılımcı ara" />
           </div>
         </div>
 
         <div className="overflow-hidden rounded-3xl border bg-card">
-          <div className="hidden grid-cols-[64px_1fr_140px_120px_40px] gap-4 border-b px-6 py-4 text-xs text-muted-foreground sm:grid">
+          <div className="hidden grid-cols-[64px_1fr_120px_40px] gap-4 border-b px-6 py-4 text-xs text-muted-foreground sm:grid">
             <span>Sıra</span>
             <span>Yazılımcı</span>
-            <span>Alan</span>
             <span>Lig puanı</span>
             <span />
           </div>
@@ -115,7 +104,7 @@ function League() {
                 <button
                   onClick={() => open(r.username, r.me)}
                   className={cn(
-                    "grid w-full grid-cols-[40px_1fr_auto] items-center gap-4 border-b px-4 py-4 text-left text-sm transition last:border-b-0 hover:bg-muted/60 sm:grid-cols-[64px_1fr_140px_120px_40px] sm:px-6",
+                    "grid w-full grid-cols-[40px_1fr_auto] items-center gap-4 border-b px-4 py-4 text-left text-sm transition last:border-b-0 hover:bg-muted/60 sm:grid-cols-[64px_1fr_120px_40px] sm:px-6",
                     r.me && "bg-secondary hover:bg-secondary",
                   )}
                 >
@@ -130,11 +119,9 @@ function League() {
                       {r.me && <span className="ml-2 text-xs text-muted-foreground">Sen</span>}
                       <span className="block truncate text-xs text-muted-foreground">
                         {r.school}
-                        <span className="sm:hidden"> · {r.field}</span>
                       </span>
                     </span>
                   </span>
-                  <span className="hidden sm:block">{r.field}</span>
                   <span className="flex items-center gap-1.5">
                     <b className="text-xl font-semibold text-cyan-ink tabular-nums">{r.score}</b>
                     {r.trend > 0 ? <ArrowUp className="size-4 text-ok" /> : r.trend < 0 ? <ArrowDown className="size-4 text-destructive" /> : null}

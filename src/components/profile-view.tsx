@@ -324,7 +324,6 @@ export function ProfileView({
               <p className="text-xs tracking-[0.08em] text-on-navy-muted uppercase">Lig puanı</p>
               <p className="mt-3 text-6xl leading-none font-semibold text-cyan tabular-nums">
                 {data.score}
-                <span className="ml-1 text-base font-normal text-on-navy-muted">/100</span>
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
                 <span className="rounded-full bg-lav px-3 py-1 text-xs font-semibold text-secondary-foreground">{levelLabel(data.level)}</span>

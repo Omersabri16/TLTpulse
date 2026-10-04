@@ -120,20 +120,20 @@ export function HomeView() {
           <Row title="awesome-list" sub="Commit'lerin %2'si senin" strike right={<Pill tone="danger">Eklenemez</Pill>} />
         </Chapter>
 
-        <Chapter no="02" title="Puanın altı yerden gelir." text={<>Projeler, yarışmalar, takım arkadaşlarının verdiği <b>akran puanı</b>, sertifikalar, amir ya da hocanın onayı ve yol haritasındaki adımlar. Hepsi kural tabanlı; aynı iş her zaman aynı puanı alır.</>}>
+        <Chapter no="02" title="Puanın altı yerden gelir." text={<>Projeler, yarışmalar, takım arkadaşlarının verdiği <b>akran puanı</b>, sertifikalar, amir ya da hocanın onayı ve yol haritasındaki adımlar. Hepsi kural tabanlı ve üst sınır yok: ne kadar çok iş, o kadar puan.</>}>
           {[
-            ["Projeler", 35],
-            ["Yarışmalar", 20],
-            ["Akran puanı", 15],
-            ["Sertifikalar", 10],
-            ["Amir ve hoca onayı", 10],
-            ["Yol haritası", 10],
+            ["Projeler", "proje başı 4–10"],
+            ["Yarışmalar", "katılım 4, ilk üç +8/6/4"],
+            ["Akran puanı", "yarışma başı 15'e kadar"],
+            ["Sertifikalar", "1–4"],
+            ["Amir ve hoca onayı", "2–6"],
+            ["Yol haritası", "adım başı 1–2"],
           ].map(([l, m]) => (
-            <Row key={l} title={String(l)} right={<span className="text-xs text-muted-foreground">en fazla {m}</span>} />
+            <Row key={l} title={l} right={<span className="text-xs text-muted-foreground">{m}</span>} />
           ))}
         </Chapter>
 
-        <Chapter no="03" title="Ligde yerini gör." text={<>Puanına göre üç ligden birindesin: <b>Yeni başlayan, Orta, Kıdemli.</b> Sıralamayı alanına göre de görebilirsin: Frontend, Backend, Veritabanı, Mobil, DevOps.</>}>
+        <Chapter no="03" title="Ligde yerini gör." text={<>Puanına göre üç ligden birindesin: <b>Yeni başlayan, Orta, Kıdemli.</b></>}>
           <div className="flex flex-wrap gap-2 py-4">
             <Pill tone="muted">Yeni başlayan · 0–59</Pill>
             <Pill tone="lav">Orta · 60–79</Pill>

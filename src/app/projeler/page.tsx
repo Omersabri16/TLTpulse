@@ -131,7 +131,6 @@ function Projects() {
           <div className="text-left sm:text-right">
             <p className="text-6xl leading-none font-semibold text-cyan tabular-nums">
               {score.total}
-              <span className="ml-1 text-base font-normal text-on-navy">/100</span>
             </p>
             <span className="mt-3 inline-block rounded-full bg-lav px-3 py-1 text-xs font-semibold text-secondary-foreground">{levelLabel(score.level)}</span>
             <Link href="/lig" className="mt-3 block text-xs text-cyan hover:underline">
@@ -162,8 +161,7 @@ function Projects() {
         </div>
 
         <p className="mb-5 text-sm text-muted-foreground">
-          Projelerden gelen puan: <b className="text-foreground">{projPart.points}</b> / {projPart.max}
-          {projPart.raw > projPart.max && " (üst sınırdasın; kaliteyi artırmak sıralamada yine fark yaratır)"}
+          Projelerden gelen puan: <b className="text-foreground">{projPart.points}</b>
         </p>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

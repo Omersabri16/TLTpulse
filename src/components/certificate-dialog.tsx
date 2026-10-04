@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Choice, Field, Modal } from "@/components/modal";
 import { btn, inputClass } from "@/lib/btn";
 import { celebrateIfLevelUp } from "@/lib/celebrate";
-import { SOURCE_MAX, verifyCertificate } from "@/lib/score";
+import { verifyCertificate } from "@/lib/score";
 import { useApp, useMyScore } from "@/lib/store";
 import type { CertProvider, CertStatus } from "@/lib/types";
 
@@ -51,8 +51,7 @@ function CertificateBody({ onOpenChange }: { onOpenChange: (o: boolean) => void 
 
   const save = () => {
     if (!res) return;
-    const part = score.parts.find((p) => p.source === "Sertifikalar")!;
-    const gain = Math.min(res.points, SOURCE_MAX.Sertifikalar - part.points);
+    const gain = res.points;
     addCertificate({ id: `c-${Date.now()}`, name: name.trim(), provider, link: link.trim(), date: new Date().toISOString().slice(0, 10), status: res.status, points: res.points });
     if (!celebrateIfLevelUp(score.total, score.total + gain)) toast.success("Sertifika eklendi", { description: gain ? `+${gain} puan` : undefined });
     onOpenChange(false);

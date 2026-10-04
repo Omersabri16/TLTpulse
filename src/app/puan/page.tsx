@@ -13,7 +13,7 @@ import type { ScoreSource } from "@/lib/types";
 const INFO: Record<ScoreSource, { icon: typeof Award; rule: string; action: { label: string; href: string } }> = {
   Projeler: { icon: FolderGit2, rule: "Her proje zorluğuna (kolay 2, orta 4, zor 6) ve kalitesine (test, CI, README, demo, commit geçmişi: 2–4) göre puan alır.", action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
   Yarışmalar: { icon: Trophy, rule: "Tamamlanan her yarışma 4 puan; ilk üçe giren takımlar ayrıca 8, 6 ya da 4 puan alır.", action: { label: "Yarışmalar", href: "/yarismalar" } },
-  "Akran puanı": { icon: Users, rule: "Yarışma bitince takım arkadaşların seni 1–5 arası puanlar. Ortalaman 15 üzerinden hesaplanır.", action: { label: "Yarışmalar", href: "/yarismalar" } },
+  "Akran puanı": { icon: Users, rule: "Yarışma bitince takım arkadaşların seni 1–5 arası puanlar. Her yarışmada ortalaman 15 üzerinden hesaplanır; yarışmalar toplanır.", action: { label: "Yarışmalar", href: "/yarismalar" } },
   Sertifikalar: { icon: Award, rule: "Resmi kaynaktan doğrulanan sertifika 3–4 puan, doğrulanamayan 1 puan alır.", action: { label: "Sertifika ekle", href: "/profil?sertifika=1" } },
   Referanslar: { icon: ShieldCheck, rule: "Amirin ya da hocan onaylarsa: kurumsal e-posta 5, kişisel e-posta 2 puan; yorum yazarsa +1.", action: { label: "Onay iste", href: "/profil?onay=1" } },
   "Yol haritası": { icon: Map, rule: "AI yol haritandaki adımları tamamladıkça 1–2 puan kazanırsın.", action: { label: "Yol haritam", href: "/yol-haritasi" } },
@@ -40,7 +40,6 @@ function Score() {
           <div className="text-left sm:text-right">
             <p className="text-6xl leading-none font-semibold text-cyan tabular-nums">
               {score.total}
-              <span className="ml-1 text-base font-normal text-on-navy">/100</span>
             </p>
             <span className="mt-3 inline-block rounded-full bg-lav px-3 py-1 text-xs font-semibold text-secondary-foreground">{levelLabel(score.level)}</span>
           </div>
@@ -62,10 +61,10 @@ function Score() {
                       <h2 className="font-semibold">{p.source}</h2>
                       <span className="text-sm tabular-nums">
                         <b className="text-lg">{p.points}</b>
-                        <span className="text-muted-foreground"> / {p.max}</span>
+                        <span className="text-muted-foreground"> puan</span>
                       </span>
                     </div>
-                    <Progress value={(p.points / p.max) * 100} className="mt-2" />
+                    <Progress value={score.total ? (p.points / score.total) * 100 : 0} className="mt-2" />
                     <p className="mt-2 text-sm text-muted-foreground">{info.rule}</p>
                   </div>
                   <Link href={info.action.href} className={btn("outline", "sm", "self-start sm:self-center")}>
@@ -96,7 +95,7 @@ function Score() {
               ))}
             </ul>
           )}
-          <p className="mt-5 border-t pt-4 text-xs text-muted-foreground">Her kaynağın bir üst sınırı var; sınırı aşan puan toplama eklenmez. Toplam en fazla 100.</p>
+          <p className="mt-5 border-t pt-4 text-xs text-muted-foreground">Puanın bir üst sınırı yok: ne kadar çok iş çıkarırsan o kadar yükselirsin. Çubuklar her kaynağın toplamdaki payını gösterir.</p>
         </Card>
       </Container>
     </>

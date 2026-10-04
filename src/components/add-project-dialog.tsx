@@ -8,7 +8,7 @@ import { Pill } from "@/components/page-shell";
 import { TagInput } from "@/components/tag-input";
 import { btn, inputClass } from "@/lib/btn";
 import { celebrateIfLevelUp } from "@/lib/celebrate";
-import { analyzeProject, parseRepoUrl, SOURCE_MAX, type AnalyzeResult } from "@/lib/score";
+import { analyzeProject, parseRepoUrl, type AnalyzeResult } from "@/lib/score";
 import { useApp, useMyScore } from "@/lib/store";
 import type { ProjectAnalysis } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -69,8 +69,7 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
   const confirm = () => {
     if (!result?.ok || !profile) return;
     const parsed = parseRepoUrl(url)!;
-    const projPart = score.parts.find((p) => p.source === "Projeler")!;
-    const gain = Math.min(result.analysis.points, SOURCE_MAX.Projeler - projPart.points);
+    const gain = result.analysis.points;
     addProject({
       id: `p-${Date.now()}`,
       name: name.trim(),
@@ -83,7 +82,7 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
       addedAt: new Date().toISOString(),
       analysis: result.analysis,
     });
-    if (!celebrateIfLevelUp(score.total, score.total + gain)) toast.success(`${name} eklendi`, { description: gain ? `+${gain} puan` : "Proje puanında üst sınıra ulaştın." });
+    if (!celebrateIfLevelUp(score.total, score.total + gain)) toast.success(`${name} eklendi`, { description: `+${gain} puan` });
     onOpenChange(false);
   };
 

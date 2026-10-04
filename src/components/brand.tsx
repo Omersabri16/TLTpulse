@@ -14,7 +14,7 @@ export function PulseIcon({ className }: { className?: string }) {
 export function Logo({ className }: { className?: string }) {
   return (
     <Link href="/" className={cn("flex items-center gap-2.5 text-[22px] font-semibold tracking-tight text-on-navy", className)} aria-label="TLTpulse ana sayfa">
-      <Image src="/logo-mark.png" alt="" width={464} height={296} priority className="h-9 w-auto shrink-0" />
+      <Image src="/logo-mark.png" alt="" width={169} height={108} priority className="h-9 w-auto shrink-0" />
       <span>
         TLTpulse<span className="text-cyan">.</span>
       </span>

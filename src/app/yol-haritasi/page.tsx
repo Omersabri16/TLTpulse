@@ -204,7 +204,6 @@ function Roadmap() {
               <p className="text-sm text-muted-foreground">Yol haritasından gelen puan</p>
               <p className="mt-1 text-3xl font-semibold">
                 {rmPart.points}
-                <span className="text-base font-normal text-muted-foreground"> / {rmPart.max}</span>
               </p>
               <p className="mt-3 text-sm text-muted-foreground">
                 {doneCount} / {roadmap.steps.length} adım tamamlandı. Adımlar ilgili işi yaptığında kendiliğinden işaretlenir.

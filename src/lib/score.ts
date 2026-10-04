@@ -18,16 +18,9 @@ import type {
   ScoreSource,
 } from "./types";
 
-export const SOURCE_MAX: Record<ScoreSource, number> = {
-  Projeler: 35,
-  Yarışmalar: 20,
-  "Akran puanı": 15,
-  Sertifikalar: 10,
-  Referanslar: 10,
-  "Yol haritası": 10,
-};
+export const SOURCES: ScoreSource[] = ["Projeler", "Yarışmalar", "Akran puanı", "Sertifikalar", "Referanslar", "Yol haritası"];
 
-export const SOURCES = Object.keys(SOURCE_MAX) as ScoreSource[];
+const PEER_POINTS_PER_COMPETITION = 15;
 
 export const levelOf = (score: number): Level => (score >= 80 ? "Kıdemli" : score >= 60 ? "Orta" : "Yeni başlayan");
 export const levelLabel = (l: Level) => (l === "Yeni başlayan" ? "Yeni başlayan ligi" : `${l} lig`);
@@ -130,7 +123,7 @@ export interface ScoreInput {
   projects: Project[];
   certs: Certificate[];
   references: Reference[];
-  peerReceived: { stars: number }[];
+  peerReceived: { stars: number; competitionId?: string }[];
   roadmap: Roadmap | null;
   roadmapDone: string[];
 }
@@ -149,10 +142,16 @@ export function competitionPoints(username: string) {
   return { points: pts, items };
 }
 
-export function peerPoints(ratings: { stars: number }[]) {
-  if (!ratings.length) return 0;
-  const avg = ratings.reduce((a, r) => a + r.stars, 0) / ratings.length;
-  return Math.round((avg / 5) * SOURCE_MAX["Akran puanı"]);
+/** Her yarışmada takım arkadaşlarının ortalaması 15 üzerinden; yarışmalar toplanır, genel sınır yok. */
+export function peerPoints(ratings: { stars: number; competitionId?: string }[]) {
+  const by = new Map<string, number[]>();
+  for (const r of ratings) {
+    const k = r.competitionId ?? "";
+    by.set(k, [...(by.get(k) ?? []), r.stars]);
+  }
+  let pts = 0;
+  for (const stars of by.values()) pts += (stars.reduce((a, b) => a + b, 0) / stars.length / 5) * PEER_POINTS_PER_COMPETITION;
+  return Math.round(pts);
 }
 
 export function computeScore(s: ScoreInput) {
@@ -165,8 +164,8 @@ export function computeScore(s: ScoreInput) {
     Referanslar: s.references.filter((r) => r.status === "Onaylandı").reduce((a, r) => a + r.points, 0),
     "Yol haritası": doneSteps.reduce((a, st) => a + st.points, 0),
   };
-  const parts = SOURCES.map((src) => ({ source: src, points: Math.min(raw[src], SOURCE_MAX[src]), raw: raw[src], max: SOURCE_MAX[src] }));
-  const total = Math.min(100, parts.reduce((a, p) => a + p.points, 0));
+  const parts = SOURCES.map((src) => ({ source: src, points: raw[src] }));
+  const total = parts.reduce((a, p) => a + p.points, 0);
   return { total, level: levelOf(total), parts };
 }
 
