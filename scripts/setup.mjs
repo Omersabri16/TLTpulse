@@ -38,7 +38,7 @@ async function auth() {
   const current = await management("/config/auth");
   const wanted = {
     site_url: SITE,
-    uri_allow_list: ["http://localhost:3000/**", "http://localhost:3100/**", "https://tltpulse.vercel.app/**", `${SITE}/**`].filter((v, i, a) => a.indexOf(v) === i).join(","),
+    uri_allow_list: ["http://localhost:3000/**", "http://localhost:3100/**", "https://tlt-pulse.vercel.app/**", `${SITE}/**`].filter((v, i, a) => a.indexOf(v) === i).join(","),
     mailer_autoconfirm: false,
     password_min_length: 8,
     smtp_admin_email: env.GMAIL_ADDRESS,
