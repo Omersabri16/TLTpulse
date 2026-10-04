@@ -14,8 +14,9 @@ export interface ChatMessage {
 }
 
 /** Mesajlar ve takım sohbeti için ortak sohbet akışı. */
-export function ChatThread({ messages, onSend, placeholder = "Bir mesaj yaz…", showAuthors = false, empty }: { messages: ChatMessage[]; onSend: (t: string) => void; placeholder?: string; showAuthors?: boolean; empty?: string }) {
+export function ChatThread({ messages, onSend, placeholder = "Bir mesaj yaz…", showAuthors = false, empty }: { messages: ChatMessage[]; onSend: (t: string) => Promise<boolean>; placeholder?: string; showAuthors?: boolean; empty?: string }) {
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   // Süslü parantez şart: yeni tarayıcılarda scrollIntoView Promise döndürüyor, effect bir şey döndürmemeli.
   useEffect(() => {
@@ -40,15 +41,17 @@ export function ChatThread({ messages, onSend, placeholder = "Bir mesaj yaz…",
       </div>
       <form
         className="flex gap-2 border-t p-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (!text.trim()) return;
-          onSend(text.trim());
-          setText("");
+          if (!text.trim() || sending) return;
+          setSending(true);
+          const ok = await onSend(text.trim());
+          setSending(false);
+          if (ok) setText("");
         }}
       >
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} className="h-11 flex-1 rounded-full bg-muted px-5 text-sm outline-none focus:ring-3 focus:ring-ring/30" aria-label="Mesaj" />
-        <button className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-50" disabled={!text.trim()} aria-label="Gönder">
+        <button className="grid size-11 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-50" disabled={!text.trim() || sending} aria-label="Gönder">
           <Send className="size-4" />
         </button>
       </form>

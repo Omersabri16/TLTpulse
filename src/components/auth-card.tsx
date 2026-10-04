@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { PulseLine } from "@/components/brand";
 import { PageShell } from "@/components/page-shell";
 import { btn } from "@/lib/btn";
+import { supabaseBrowser } from "@/lib/supabase/browser";
 
 export function AuthCard({ title, subtitle, children, footer }: { title: string; subtitle: string; children: ReactNode; footer: ReactNode }) {
   return (
@@ -26,13 +27,35 @@ export function AuthCard({ title, subtitle, children, footer }: { title: string;
   );
 }
 
-export function GoogleButton({ onClick }: { onClick: () => void }) {
+// Google girişi Supabase panelinde Google sağlayıcısı açılınca NEXT_PUBLIC_GOOGLE_LOGIN=1 ile görünür.
+const GOOGLE_ON = process.env.NEXT_PUBLIC_GOOGLE_LOGIN === "1";
+
+export function GoogleButton({ next }: { next: string }) {
+  if (!GOOGLE_ON) return null;
   return (
-    <button type="button" onClick={onClick} className={btn("outline", "lg", "w-full")}>
+    <button
+      type="button"
+      onClick={() =>
+        supabaseBrowser().auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent(next)}` },
+        })
+      }
+      className={btn("outline", "lg", "w-full")}
+    >
       <svg viewBox="0 0 24 24" aria-hidden>
         <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.3-1.6 3.9-5.5 3.9-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.3 14.6 2.3 12 2.3 6.6 2.3 2.3 6.6 2.3 12s4.3 9.7 9.7 9.7c5.6 0 9.3-3.9 9.3-9.5 0-.6-.1-1.1-.2-1.6H12z" />
       </svg>
       Google ile devam et
     </button>
+  );
+}
+
+export function OrDivider() {
+  if (!GOOGLE_ON) return null;
+  return (
+    <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+      <span className="h-px flex-1 bg-border" /> ya da e-posta ile <span className="h-px flex-1 bg-border" />
+    </div>
   );
 }

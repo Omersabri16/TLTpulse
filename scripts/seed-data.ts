@@ -1,4 +1,4 @@
-// Örnek veri. Backend (Supabase) bağlanınca bu dosyanın yerini sorgular alacak.
+// Başlangıç (demo) verisi. Sadece scripts/seed.mts kullanır; uygulama bu dosyayı içe aktarmaz.
 import type {
   Certificate,
   Competition,
@@ -9,7 +9,7 @@ import type {
   PublicUser,
   Reference,
   ScoreEvent,
-} from "./types";
+} from "../src/lib/types.ts";
 
 export const ME_USERNAME = "denizkaya";
 
@@ -43,7 +43,9 @@ export const DEMO_PROFILE: Profile = {
   school: "İstanbul Teknik Üniversitesi",
   department: "Bilgisayar Mühendisliği",
   city: "İstanbul",
-  github: "denizkaya",
+  github: "",
+  githubVerified: false,
+  githubCode: "",
   about: "API ve veritabanı tarafında çalışmayı seviyorum. Gerçek zamanlı sistemler ve temiz şema tasarımı ilgimi çekiyor.",
   interests: ["Gerçek zamanlı sistemler", "Açık kaynak", "Veritabanı tasarımı"],
   skills: [

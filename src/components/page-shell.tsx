@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from "react";
 import { Assistant } from "@/components/assistant";
 import { Logo } from "@/components/brand";
 import { SiteHeader } from "@/components/site-header";
-import { useApp, useHydrated } from "@/lib/store";
+import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 /** Koyu lacivert sayfa başlık bandı. `highlight` başlığın kesikli çerçeveli kelimesi. */
@@ -66,13 +66,12 @@ export function Container({ children, className }: { children: ReactNode; classN
   return <div className={cn("mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10", className)}>{children}</div>;
 }
 
-/** Üst menü + içerik + alt bilgi. `auth` verilirse oturum yoksa girişe yönlendirir. */
+/** Üst menü + içerik + alt bilgi. Asıl koruma proxy.ts'te; `auth` burada oturum düşerse (çıkış) girişe yönlendirir. */
 export function PageShell({ children, auth = false }: { children: ReactNode; auth?: boolean }) {
-  const hydrated = useHydrated();
   const session = useApp((s) => s.session);
   const router = useRouter();
   const pathname = usePathname();
-  const blocked = auth && hydrated && !session;
+  const blocked = auth && !session;
 
   useEffect(() => {
     if (blocked) router.replace(`/giris?next=${encodeURIComponent(pathname)}`);
@@ -82,14 +81,14 @@ export function PageShell({ children, auth = false }: { children: ReactNode; aut
     <>
       <SiteHeader />
       <main className="flex flex-1 flex-col">
-        {auth && (!hydrated || !session) ? (
+        {blocked ? (
           <div className="grid flex-1 place-items-center py-32 text-sm text-muted-foreground">Yükleniyor…</div>
         ) : (
           children
         )}
       </main>
       <SiteFooter />
-      {hydrated && session && <Assistant />}
+      {session && <Assistant />}
     </>
   );
 }

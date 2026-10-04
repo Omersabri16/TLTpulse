@@ -3,12 +3,12 @@
 import { BadgeCheck, CircleAlert, CircleX, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { addCertificate, checkCertificate } from "@/app/actions/projects";
 import { Choice, Field, Modal } from "@/components/modal";
 import { btn, inputClass } from "@/lib/btn";
 import { celebrateIfLevelUp } from "@/lib/celebrate";
-import { verifyCertificate } from "@/lib/score";
 import { isHttpUrl } from "@/lib/safe";
-import { useApp, useMyScore } from "@/lib/store";
+import { useAct, useApp, useMyScore } from "@/lib/store";
 import type { CertProvider, CertStatus } from "@/lib/types";
 
 const PROVIDERS: CertProvider[] = ["BTK Akademi", "Credly", "Coursera", "Udemy", "Diğer"];
@@ -31,8 +31,9 @@ export function CertificateDialog({ open, onOpenChange }: { open: boolean; onOpe
 
 function CertificateBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
   const profile = useApp((s) => s.profile);
-  const addCertificate = useApp((s) => s.addCertificate);
   const score = useMyScore();
+  const act = useAct();
+  const [busy, setBusy] = useState(false);
   const [provider, setProvider] = useState<CertProvider>("BTK Akademi");
   const [name, setName] = useState("");
   const [link, setLink] = useState("");
@@ -41,21 +42,28 @@ function CertificateBody({ onOpenChange }: { onOpenChange: (o: boolean) => void 
   const [res, setRes] = useState<{ status: CertStatus; points: number } | null>(null);
   const [err, setErr] = useState("");
 
-  const check = () => {
+  const input = () => ({ name, provider, link, nameOnCert });
+
+  const check = async () => {
     if (!name.trim()) return setErr("Sertifikanın adını yaz.");
     if (!link.trim()) return setErr("Sertifika linkini yapıştır.");
     if (!isHttpUrl(link)) return setErr("Link https:// ile başlamalı.");
     setErr("");
-    setRes(verifyCertificate(provider, link, nameOnCert, profile?.name ?? ""));
     setPhase("checking");
-    setTimeout(() => setPhase("result"), 1300);
+    const [r] = await Promise.all([act(checkCertificate(input())), new Promise((ok) => setTimeout(ok, 900))]);
+    if (!r) return setPhase("form");
+    setRes(r);
+    setPhase("result");
   };
 
-  const save = () => {
+  const save = async () => {
     if (!res) return;
-    const gain = res.points;
-    addCertificate({ id: `c-${Date.now()}`, name: name.trim(), provider, link: link.trim(), date: new Date().toISOString().slice(0, 10), status: res.status, points: res.points });
-    if (!celebrateIfLevelUp(score.total, score.total + gain)) toast.success("Sertifika eklendi", { description: gain ? `+${gain} puan` : undefined });
+    setBusy(true);
+    const before = score.total;
+    const r = await act(addCertificate(input()));
+    setBusy(false);
+    if (!r) return;
+    if (!celebrateIfLevelUp(before, r.me.score.total)) toast.success("Sertifika eklendi", { description: r.points ? `+${r.points} puan` : undefined });
     onOpenChange(false);
   };
 
@@ -113,8 +121,8 @@ function CertificateBody({ onOpenChange }: { onOpenChange: (o: boolean) => void 
             <button onClick={() => setPhase("form")} className={btn("ghost")}>
               Düzenle
             </button>
-            <button onClick={save} className={btn("primary")}>
-              Profile ekle
+            <button onClick={save} disabled={busy} className={btn("primary")}>
+              {busy ? "Ekleniyor…" : "Profile ekle"}
             </button>
           </div>
         </div>

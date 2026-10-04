@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { saveProfile } from "@/app/actions/profile";
+import { GithubVerify } from "@/components/github-verify";
 import { Choice, Field, Modal } from "@/components/modal";
 import { TagInput } from "@/components/tag-input";
 import { btn, inputClass } from "@/lib/btn";
-import { useApp } from "@/lib/store";
+import { useAct, useApp } from "@/lib/store";
 import { FIELDS, type Field as FieldT } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -15,21 +17,33 @@ export function ProfileEditDialog({ open, onOpenChange }: { open: boolean; onOpe
 
 function ProfileEditBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
   const profile = useApp((s) => s.profile);
-  const update = useApp((s) => s.updateProfile);
+  const act = useAct();
+  const [busy, setBusy] = useState(false);
   const [f, setF] = useState(profile);
   const [skills, setSkills] = useState<string[]>(() => profile?.skills.map((s) => s.name) ?? []);
 
   if (!f) return null;
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF({ ...f, [k]: v });
 
-  const save = () => {
-    const prev = profile!.skills;
-    update({
-      ...f,
-      github: f.github.replace(/^@/, "").replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, ""),
-      skills: skills.map((name) => prev.find((p) => p.name.toLowerCase() === name.toLowerCase()) ?? { name, proof: "Beyan" as const }),
-      education: f.school && !f.education.length ? [{ school: f.school, department: f.department, start: "", end: "" }] : f.education,
-    });
+  const save = async () => {
+    setBusy(true);
+    const ok = await act(
+      saveProfile({
+        name: f.name,
+        headline: f.headline,
+        field: f.field,
+        school: f.school,
+        department: f.department,
+        city: f.city,
+        github: f.github,
+        about: f.about,
+        interests: f.interests,
+        skills,
+        education: f.school && !f.education.length ? [{ school: f.school, department: f.department, start: "", end: "" }] : f.education,
+      }),
+    );
+    setBusy(false);
+    if (!ok) return;
     toast.success("Profil güncellendi");
     onOpenChange(false);
   };
@@ -68,6 +82,7 @@ function ProfileEditBody({ onOpenChange }: { onOpenChange: (o: boolean) => void 
         <Field label="GitHub kullanıcı adı">
           <input className={inputClass} value={f.github} onChange={(e) => set("github", e.target.value)} placeholder="kullaniciadi" />
         </Field>
+        {profile && f.github === profile.github && <GithubVerify />}
         <Field label="Hakkında" hint={`${f.about.length} karakter`}>
           <textarea className={cn(inputClass, "h-auto min-h-24 py-3")} value={f.about} onChange={(e) => set("about", e.target.value)} placeholder="Ne üzerinde çalışmayı seviyorsun?" />
         </Field>
@@ -81,7 +96,9 @@ function ProfileEditBody({ onOpenChange }: { onOpenChange: (o: boolean) => void 
           <button type="button" onClick={() => onOpenChange(false)} className={btn("ghost")}>
             Vazgeç
           </button>
-          <button className={btn("primary")}>Kaydet</button>
+          <button disabled={busy} className={btn("primary")}>
+            {busy ? "Kaydediliyor…" : "Kaydet"}
+          </button>
         </div>
       </form>
     </Modal>

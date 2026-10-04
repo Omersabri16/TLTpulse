@@ -3,19 +3,22 @@
 import { Check as CheckIcon, GitBranch, Loader2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, Choice, Field, Modal } from "@/components/modal";
+import { addProject, previewProject } from "@/app/actions/projects";
+import { GithubVerify } from "@/components/github-verify";
+import { Choice, Field, Modal } from "@/components/modal";
 import { Pill } from "@/components/page-shell";
 import { TagInput } from "@/components/tag-input";
 import { btn, inputClass } from "@/lib/btn";
 import { celebrateIfLevelUp } from "@/lib/celebrate";
-import { analyzeProject, parseRepoUrl, type AnalyzeResult } from "@/lib/score";
+import { parseRepoUrl } from "@/lib/score";
 import { isHttpUrl } from "@/lib/safe";
-import { useApp, useMyScore } from "@/lib/store";
+import { useAct, useApp, useMyScore } from "@/lib/store";
 import type { ProjectAnalysis } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const STAGES = ["Repo bulundu", "Commit yazarlığı kontrol ediliyor", "Dosya yapısı okunuyor: test, CI, README", "Zorluk ve kalite hesaplanıyor"];
-const NO_CHECKS: ProjectAnalysis["checks"] = { readme: true, tests: false, ci: false, demo: false };
+type Result = { ok: true; analysis: ProjectAnalysis } | { ok: false; reason: string };
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Pencere her açılışta temiz durumla başlasın diye içerik sadece açıkken bağlanır. */
 export function AddProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -25,8 +28,9 @@ export function AddProjectDialog({ open, onOpenChange }: { open: boolean; onOpen
 function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }) {
   const profile = useApp((s) => s.profile);
   const projects = useApp((s) => s.projects);
-  const addProject = useApp((s) => s.addProject);
   const score = useMyScore();
+  const act = useAct();
+  const [busy, setBusy] = useState(false);
 
   const [phase, setPhase] = useState<"form" | "analyzing" | "result">("form");
   const [url, setUrl] = useState("");
@@ -35,16 +39,15 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
   const [techs, setTechs] = useState<string[]>([]);
   const [role, setRole] = useState<"Tek başıma" | "Takımla">("Tek başıma");
   const [demoUrl, setDemoUrl] = useState("");
-  const [checks, setChecks] = useState(NO_CHECKS);
   const [err, setErr] = useState("");
   const [stage, setStage] = useState(0);
-  const [result, setResult] = useState<AnalyzeResult | null>(null);
+  const [result, setResult] = useState<Result | null>(null);
 
+  // Analiz sürerken adımlar sırayla ilerler; sonuç gelince kalan adımlar tamamlanır.
   useEffect(() => {
     if (phase !== "analyzing") return;
-    const timers = STAGES.map((_, i) => setTimeout(() => setStage(i + 1), 450 * (i + 1)));
-    const done = setTimeout(() => setPhase("result"), 450 * STAGES.length + 300);
-    return () => [...timers, done].forEach(clearTimeout);
+    const timers = STAGES.slice(0, -1).map((_, i) => setTimeout(() => setStage((s) => Math.max(s, i + 1)), 700 * (i + 1)));
+    return () => timers.forEach(clearTimeout);
   }, [phase]);
 
   const onUrl = (v: string) => {
@@ -53,7 +56,9 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
     if (p && !name) setName(p.repo);
   };
 
-  const submit = () => {
+  const input = () => ({ repoUrl: url, name, description, techs, role, demoUrl: demoUrl.trim() });
+
+  const submit = async () => {
     const parsed = parseRepoUrl(url);
     if (!parsed) return setErr("Geçerli bir GitHub repo linki gir: github.com/kullanici/repo");
     if (projects.some((p) => p.repoUrl.toLowerCase().replace(/\/$/, "") === `https://github.com/${parsed.owner}/${parsed.repo}`.toLowerCase()))
@@ -64,29 +69,39 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
     if (demoUrl.trim() && !isHttpUrl(demoUrl)) return setErr("Demo linki https:// ile başlamalı.");
     setErr("");
     setStage(0);
-    setResult(analyzeProject({ repoUrl: url, techs, role, checks: { ...checks, demo: !!demoUrl.trim() }, githubUser: profile?.github ?? "" }));
     setPhase("analyzing");
+    const [res] = await Promise.all([act(previewProject(input()), { silent: true }).then((r) => r), wait(1400)]);
+    setStage(STAGES.length);
+    await wait(300);
+    if (res === null) {
+      setPhase("form");
+      return setErr("Analiz yapılamadı. Linki kontrol edip tekrar dene.");
+    }
+    setResult(res.ok ? { ok: true, analysis: res.analysis } : { ok: false, reason: res.reason });
+    setPhase("result");
   };
 
-  const confirm = () => {
-    if (!result?.ok || !profile) return;
-    const parsed = parseRepoUrl(url)!;
-    const gain = result.analysis.points;
-    addProject({
-      id: `p-${Date.now()}`,
-      name: name.trim(),
-      repoUrl: `https://github.com/${parsed.owner}/${parsed.repo}`,
-      description: description.trim(),
-      techs,
-      role,
-      language: techs[0],
-      demoUrl: demoUrl.trim() || undefined,
-      addedAt: new Date().toISOString(),
-      analysis: result.analysis,
-    });
-    if (!celebrateIfLevelUp(score.total, score.total + gain)) toast.success(`${name} eklendi`, { description: `+${gain} puan` });
+  const confirm = async () => {
+    if (!result?.ok) return;
+    setBusy(true);
+    const before = score.total;
+    const res = await act(addProject(input()));
+    setBusy(false);
+    if (!res) return;
+    if (!celebrateIfLevelUp(before, res.me.score.total)) toast.success(`${name} eklendi`, { description: `+${res.points} puan` });
     onOpenChange(false);
   };
+
+  if (!profile?.github || !profile.githubVerified)
+    return (
+      <Modal open onOpenChange={onOpenChange} title="Proje ekle" description="Projelerin GitHub'daki commit'lerinle eşleştirilir. Önce GitHub hesabının sana ait olduğunu doğrula." className="sm:max-w-xl">
+        {profile?.github ? (
+          <GithubVerify />
+        ) : (
+          <p className="text-sm text-muted-foreground">Profiline GitHub kullanıcı adını ekle (Profili düzenle), sonra burada doğrula.</p>
+        )}
+      </Modal>
+    );
 
   return (
     <Modal
@@ -104,7 +119,7 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
             submit();
           }}
         >
-          <Field label="GitHub linki" hint={profile?.github ? `Commit'lerin github.com/${profile.github} hesabıyla eşleştirilir.` : "Profiline GitHub kullanıcı adını eklersen yazarlık daha doğru ölçülür."}>
+          <Field label="GitHub linki" hint={`Commit'lerin github.com/${profile.github} hesabıyla eşleştirilir. Sadece herkese açık repolar.`}>
             <div className="relative">
               <GitBranch className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground" />
               <input className={cn(inputClass, "pl-10")} value={url} onChange={(e) => onUrl(e.target.value)} placeholder="https://github.com/kullanici/repo" autoFocus />
@@ -127,13 +142,7 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
           <Field label="Nasıl yaptın?">
             <Choice value={role} onChange={setRole} options={["Tek başıma", "Takımla"]} />
           </Field>
-          <Field label="Projede neler var?" hint="GitHub'dan da kontrol edilir; yanlış işaretlenen puan getirmez.">
-            <div className="flex flex-wrap gap-2">
-              <Check label="README" checked={checks.readme} onChange={(v) => setChecks({ ...checks, readme: v })} />
-              <Check label="Testler" checked={checks.tests} onChange={(v) => setChecks({ ...checks, tests: v })} />
-              <Check label="CI (GitHub Actions)" checked={checks.ci} onChange={(v) => setChecks({ ...checks, ci: v })} />
-            </div>
-          </Field>
+          <p className="text-xs text-muted-foreground">README, testler, CI ve commit geçmişi GitHub&apos;dan otomatik okunur.</p>
           {err && <p className="text-sm text-destructive">{err}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => onOpenChange(false)} className={btn("ghost")}>
@@ -209,8 +218,8 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
             <button onClick={() => setPhase("form")} className={btn("ghost")}>
               Düzenle
             </button>
-            <button onClick={confirm} className={btn("primary")}>
-              Projeyi ekle
+            <button onClick={confirm} disabled={busy} className={btn("primary")}>
+              {busy ? "Ekleniyor…" : "Projeyi ekle"}
             </button>
           </div>
         </div>

@@ -1,6 +1,5 @@
-// Puan kuralları (kararlar.md Bölüm 5). Hepsi kural tabanlı ve deterministik:
-// aynı girdi her zaman aynı puanı verir. AI puan vermez.
-import { COMPETITIONS, USERS } from "./mock";
+// Puan kuralları (kararlar.md Bölüm 5). Hepsi kural tabanlı ve deterministik: aynı girdi her zaman aynı puanı verir.
+// AI puan vermez. Saf fonksiyonlar: hem sunucu (puanı yazan tek yer) hem arayüz (önizleme) kullanır.
 import type {
   Certificate,
   CertProvider,
@@ -14,6 +13,7 @@ import type {
   Quality,
   Reference,
   Roadmap,
+  RoadmapCheck,
   RoadmapStep,
   ScoreSource,
 } from "./types";
@@ -25,7 +25,7 @@ const PEER_POINTS_PER_COMPETITION = 15;
 export const levelOf = (score: number): Level => (score >= 80 ? "Kıdemli" : score >= 60 ? "Orta" : "Yeni başlayan");
 export const levelLabel = (l: Level) => (l === "Yeni başlayan" ? "Yeni başlayan ligi" : `${l} lig`);
 
-/** Basit, deterministik hash: aynı link her zaman aynı sonucu versin. */
+/** Basit, deterministik hash (avatar rengi gibi görsel seçimler için; güvenlik için değil). */
 export function hash(s: string) {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
@@ -39,70 +39,81 @@ export function hash(s: string) {
 
 export const DIFFICULTY_POINTS: Record<Difficulty, number> = { Kolay: 2, Orta: 4, Zor: 6 };
 export const QUALITY_POINTS: Record<Quality, number> = { Zayıf: 2, İyi: 3, "Çok iyi": 4 };
+export const MIN_AUTHORSHIP = 10;
 
 export function parseRepoUrl(url: string): { owner: string; repo: string } | null {
-  const m = url.trim().match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/);
+  const m = url.trim().match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/);
   return m ? { owner: m[1], repo: m[2] } : null;
 }
 
-export interface AnalyzeInput {
-  repoUrl: string;
-  techs: string[];
+/** GitHub'dan okunan sinyaller. Kutucuklar kullanıcıdan değil repodan gelir. */
+export interface RepoSignals {
+  techs: number;
+  languages: number;
+  files: number;
+  commits: number;
   role: "Tek başıma" | "Takımla";
-  checks: ProjectAnalysis["checks"];
-  githubUser: string;
+  readme: boolean;
+  tests: boolean;
+  ci: boolean;
+  demo: boolean;
+  authorship: number;
 }
 
-export type AnalyzeResult = { ok: true; analysis: ProjectAnalysis } | { ok: false; reason: string; authorship?: number };
-
-/**
- * Demo analizi. Gerçekte GitHub API'den commit yazarlığı, dosya ağacı (test klasörü,
- * CI dosyası, README) ve dil dağılımı okunacak; puan kuralı aynı kalacak.
- */
-export function analyzeProject(input: AnalyzeInput): AnalyzeResult {
-  const parsed = parseRepoUrl(input.repoUrl);
-  if (!parsed) return { ok: false, reason: "Geçerli bir GitHub repo linki gir: github.com/kullanici/repo" };
-  const h = hash(parsed.owner.toLowerCase() + "/" + parsed.repo.toLowerCase());
-  const own = input.githubUser && parsed.owner.toLowerCase() === input.githubUser.toLowerCase();
-  // Kendi hesabındaki repo yüksek, başkasınınki (fork, katkı) düşük yazarlık alır.
-  const authorship = own ? 82 + (h % 19) : h % 28;
-  if (authorship < 10)
-    return { ok: false, authorship, reason: `Bu repodaki commit'lerin sadece %${authorship}'i senin. Eklemek için en az %10 olmalı (fork'lar bu yüzden eklenemiyor).` };
-
-  const commits = 12 + (h % 150);
-  const c = input.checks;
-  const size = input.techs.length + ((h >> 3) % 3) + (input.role === "Takımla" ? 0 : 1) + (commits > 90 ? 1 : 0);
-  const difficulty: Difficulty = size <= 2 ? "Kolay" : size <= 4 ? "Orta" : "Zor";
-  const q = [c.readme, c.tests, c.ci, c.demo, commits > 50].filter(Boolean).length;
+export function scoreRepo(s: RepoSignals): ProjectAnalysis {
+  const size =
+    s.techs +
+    (s.languages >= 3 ? 1 : 0) +
+    (s.files > 40 ? 1 : 0) +
+    (s.files > 150 ? 1 : 0) +
+    (s.role === "Tek başıma" ? 1 : 0) +
+    (s.commits > 90 ? 1 : 0);
+  const difficulty: Difficulty = size <= 3 ? "Kolay" : size <= 5 ? "Orta" : "Zor";
+  const q = [s.readme, s.tests, s.ci, s.demo, s.commits > 50].filter(Boolean).length;
   const quality: Quality = q <= 1 ? "Zayıf" : q <= 3 ? "İyi" : "Çok iyi";
   const points = DIFFICULTY_POINTS[difficulty] + QUALITY_POINTS[quality];
 
   const plus: string[] = [];
   const minus: string[] = [];
-  (c.tests ? plus : minus).push("test");
-  (c.ci ? plus : minus).push("CI");
-  (c.readme ? plus : minus).push("README");
-  if (c.demo) plus.push("canlı demo");
+  (s.tests ? plus : minus).push("test");
+  (s.ci ? plus : minus).push("CI");
+  (s.readme ? plus : minus).push("README");
+  if (s.demo) plus.push("canlı demo");
   const summary =
-    `${input.techs.length} teknoloji ve ${commits} commit ile ${difficulty.toLowerCase()} bir proje.` +
+    `${s.files} dosya, ${s.commits} commit ve ${s.techs} teknolojiyle ${difficulty.toLowerCase()} bir proje.` +
     (plus.length ? ` Artılar: ${plus.join(", ")}.` : "") +
     (minus.length ? ` Eksik: ${minus.join(", ")}.` : "");
 
-  return { ok: true, analysis: { difficulty, quality, authorship, commits, checks: c, points, summary } };
+  return {
+    difficulty,
+    quality,
+    authorship: s.authorship,
+    commits: s.commits,
+    checks: { readme: s.readme, tests: s.tests, ci: s.ci, demo: s.demo },
+    points,
+    summary,
+  };
 }
 
 // ---------- Sertifika doğrulama ----------
 
-/** Demo doğrulaması. Gerçekte BTK Akademi / Credly kaynağından çekilecek (kararlar.md Bölüm 6). */
+/** Kural tabanlı kontrol (kararlar.md Bölüm 6). Resmi kaynaktan çekme ileride bunun yerini alacak. */
 export function verifyCertificate(provider: CertProvider, link: string, nameOnCert: string, profileName: string): { status: CertStatus; points: number } {
   const norm = (s: string) =>
     s.toLocaleLowerCase("tr").replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c").replace(/\s+/g, " ").trim();
   const known = provider === "BTK Akademi" || provider === "Credly";
+  let host = "";
+  try {
+    host = new URL(link).hostname.toLowerCase();
+  } catch {
+    return { status: "Doğrulanamadı", points: 1 };
+  }
+  const on = (d: string) => host === d || host.endsWith("." + d);
   const linkOk =
-    (provider === "BTK Akademi" && /btkakademi\.gov\.tr/.test(link)) ||
-    (provider === "Credly" && /credly\.com/.test(link)) ||
-    (provider === "Coursera" && /coursera\.org/.test(link)) ||
-    (provider === "Udemy" && /udemy\.com/.test(link));
+    (provider === "BTK Akademi" && on("btkakademi.gov.tr")) ||
+    (provider === "Credly" && on("credly.com")) ||
+    (provider === "Coursera" && on("coursera.org")) ||
+    (provider === "Udemy" && on("udemy.com"));
   if (!linkOk) return { status: "Doğrulanamadı", points: 1 };
   if (nameOnCert && norm(nameOnCert) !== norm(profileName)) return { status: "İsim uyuşmuyor", points: 0 };
   return { status: "Doğrulandı", points: known ? 4 : 3 };
@@ -110,34 +121,36 @@ export function verifyCertificate(provider: CertProvider, link: string, nameOnCe
 
 // ---------- Referans ----------
 
-const PERSONAL = /@(gmail|hotmail|outlook|yahoo|icloud|yandex|protonmail)\./i;
+const PERSONAL = /@(gmail|hotmail|outlook|yahoo|icloud|yandex|protonmail|live|msn|aol|mail)\./i;
 export const isCorporateEmail = (email: string) => !PERSONAL.test(email);
 /** Kurumsal e-posta tam, kişisel e-posta düşük ağırlık; yorum yazılırsa +1. */
 export const referencePoints = (email: string, hasComment: boolean) => (isCorporateEmail(email) ? 5 : 2) + (hasComment ? 1 : 0);
 
 // ---------- Toplam puan ----------
 
-export interface ScoreInput {
-  username: string;
-  profile: Profile | null;
-  projects: Project[];
-  certs: Certificate[];
-  references: Reference[];
-  peerReceived: { stars: number; competitionId?: string }[];
-  roadmap: Roadmap | null;
-  roadmapDone: string[];
+export interface CompetitionResult {
+  id: string;
+  code: string;
+  title: string;
+  rank?: number | null;
 }
 
-export function competitionPoints(username: string) {
+export interface ScoreInput {
+  projects: { analysis: ProjectAnalysis }[];
+  certs: { points: number }[];
+  references: { status: Reference["status"]; points: number }[];
+  peerReceived: { stars: number; competitionId?: string }[];
+  completedCompetitions: CompetitionResult[];
+  roadmapDonePoints: number;
+}
+
+export function competitionPoints(results: CompetitionResult[]) {
   let pts = 0;
   const items: { label: string; points: number; id: string }[] = [];
-  for (const c of COMPETITIONS) {
-    if (c.status !== "Tamamlandı") continue;
-    const t = c.teams.find((t) => t.members.some((m) => m.username === username));
-    if (!t) continue;
-    const bonus = t.rank === 1 ? 8 : t.rank === 2 ? 6 : t.rank === 3 ? 4 : 0;
+  for (const c of results) {
+    const bonus = c.rank === 1 ? 8 : c.rank === 2 ? 6 : c.rank === 3 ? 4 : 0;
     pts += 4 + bonus;
-    items.push({ id: c.id, label: `${c.code} ${c.title}${t.rank && t.rank <= 3 ? ` · ${t.rank}. takım` : " · katılım"}`, points: 4 + bonus });
+    items.push({ id: c.id, label: `${c.code} ${c.title}${c.rank && c.rank <= 3 ? ` · ${c.rank}. takım` : " · katılım"}`, points: 4 + bonus });
   }
   return { points: pts, items };
 }
@@ -155,14 +168,13 @@ export function peerPoints(ratings: { stars: number; competitionId?: string }[])
 }
 
 export function computeScore(s: ScoreInput) {
-  const doneSteps = s.roadmap ? s.roadmap.steps.filter((st) => s.roadmapDone.includes(st.id)) : [];
   const raw: Record<ScoreSource, number> = {
     Projeler: s.projects.reduce((a, p) => a + p.analysis.points, 0),
-    Yarışmalar: competitionPoints(s.username).points,
+    Yarışmalar: competitionPoints(s.completedCompetitions).points,
     "Akran puanı": peerPoints(s.peerReceived),
     Sertifikalar: s.certs.reduce((a, c) => a + c.points, 0),
     Referanslar: s.references.filter((r) => r.status === "Onaylandı").reduce((a, r) => a + r.points, 0),
-    "Yol haritası": doneSteps.reduce((a, st) => a + st.points, 0),
+    "Yol haritası": s.roadmapDonePoints,
   };
   const parts = SOURCES.map((src) => ({ source: src, points: raw[src] }));
   const total = parts.reduce((a, p) => a + p.points, 0);
@@ -182,19 +194,7 @@ export interface LeagueRow {
   me?: boolean;
 }
 
-export function leagueRows(me: LeagueRow | null) {
-  const rows: LeagueRow[] = USERS.map((u) => ({ username: u.username, name: u.name, school: u.school, city: u.city, field: u.field, score: u.score, trend: u.trend }));
-  if (me) rows.push({ ...me, me: true });
-  return rows.sort((a, b) => b.score - a.score);
-}
-
-export function myRank(me: LeagueRow) {
-  const lvl = levelOf(me.score);
-  const same = leagueRows(me).filter((r) => levelOf(r.score) === lvl);
-  return { rank: same.findIndex((r) => r.me) + 1, of: same.length };
-}
-
-// ---------- Profil doluluğu ve AI yol haritası ----------
+// ---------- Profil doluluğu ve yol haritası ----------
 
 export function completeness(profile: Profile | null, projects: Project[]) {
   const p = profile;
@@ -245,7 +245,20 @@ export function stepDone(step: RoadmapStep, ctx: RoadmapContext, baseline: Roadm
   }
 }
 
-const TARGET_SKILLS: Record<Field, string[]> = {
+/** Adımın puanı ve kısayolu kural tablosundan gelir; AI sadece başlık ve açıklama önerir. */
+export const STEP_RULES: Record<RoadmapCheck, { points: number; action: { label: string; href: string } }> = {
+  project_any: { points: 2, action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
+  project_tests: { points: 2, action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
+  project_hard: { points: 2, action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
+  apply_competition: { points: 2, action: { label: "Yarışmalar", href: "/yarismalar" } },
+  certificate: { points: 1, action: { label: "Sertifika ekle", href: "/profil?sertifika=1" } },
+  reference: { points: 2, action: { label: "Onay iste", href: "/profil?onay=1" } },
+  peer_rating: { points: 1, action: { label: "Yarışmalar", href: "/yarismalar" } },
+  about: { points: 1, action: { label: "Profili düzenle", href: "/profil?duzenle=1" } },
+};
+export const ROADMAP_CHECKS = Object.keys(STEP_RULES) as RoadmapCheck[];
+
+export const TARGET_SKILLS: Record<Field, string[]> = {
   Frontend: ["React", "TypeScript", "Erişilebilirlik", "Next.js"],
   Backend: ["Node.js", "PostgreSQL", "Docker", "Redis"],
   Veritabanı: ["SQL", "PostgreSQL", "İndeksleme", "Yedekleme"],
@@ -253,57 +266,44 @@ const TARGET_SKILLS: Record<Field, string[]> = {
   DevOps: ["Docker", "Kubernetes", "CI/CD", "Gözlemlenebilirlik"],
 };
 
-/**
- * AI yol haritası. Gerçekte profil özeti Gemini'ye gönderilip adımlar JSON olarak alınacak;
- * burada aynı çıktı şeklini kural tabanlı üretiyoruz.
- */
-export function generateRoadmap(ctx: RoadmapContext, target: Field): Roadmap {
+export function roadmapBaseline(ctx: RoadmapContext): Roadmap["baseline"] {
+  return {
+    projects: ctx.projects.length,
+    testedProjects: ctx.projects.filter((p) => p.analysis.checks.tests).length,
+    hardProjects: ctx.projects.filter((p) => p.analysis.difficulty === "Zor").length,
+    applications: Object.keys(ctx.applications).length,
+    certs: ctx.certs.filter((c) => c.status === "Doğrulandı").length,
+    references: ctx.references.filter((r) => r.status === "Onaylandı").length,
+    peerGiven: ctx.peerGivenCount,
+  };
+}
+
+/** Kural tabanlı yol haritası. Gemini çalışmazsa ya da çıktısı geçersizse bu kullanılır. */
+export function generateRoadmap(ctx: RoadmapContext, target: Field, openComp: { id: string; code: string; title: string } | null): Omit<Roadmap, "generatedAt"> {
   const { profile, projects, certs, references } = ctx;
-  const tested = projects.filter((p) => p.analysis.checks.tests).length;
-  const hard = projects.filter((p) => p.analysis.difficulty === "Zor").length;
-  const verifiedCerts = certs.filter((c) => c.status === "Doğrulandı").length;
-  const approved = references.filter((r) => r.status === "Onaylandı").length;
+  const base = roadmapBaseline(ctx);
   const missing = TARGET_SKILLS[target].filter((s) => !profile.skills.some((k) => k.name.toLowerCase() === s.toLowerCase() && k.proof !== "Beyan"));
-  const openComp = COMPETITIONS.find((c) => c.status === "Başvurular açık" && c.positions.some((p) => p.field === target));
 
   const steps: RoadmapStep[] = [];
-  const add = (s: Omit<RoadmapStep, "id">) => steps.push({ ...s, id: `s-${steps.length + 1}` });
+  const add = (check: RoadmapCheck, title: string, detail: string, href?: string) =>
+    steps.push({ id: `s-${steps.length + 1}`, title, detail, check, points: STEP_RULES[check].points, action: href ? { ...STEP_RULES[check].action, href } : STEP_RULES[check].action });
 
-  if (missing.length)
-    add({ title: `${missing[0]} kullanan bir ${target} projesi ekle`, detail: `${target} hedefin için ${missing[0]} kanıtı eksik. Küçük ama bitmiş bir proje yeter.`, points: 2, action: { label: "Proje ekle", href: "/projeler?ekle=1" }, check: "project_any" });
-  if (tested <= hard || tested < 2)
-    add({ title: "Testleri olan bir proje ekle", detail: "Projelerinin çoğunda test yok. Testli bir proje, kalite puanını doğrudan artırır.", points: 2, action: { label: "Proje ekle", href: "/projeler?ekle=1" }, check: "project_tests" });
-  if (openComp)
-    add({ title: `${openComp.code} ${openComp.title} yarışmasında ${target} pozisyonuna başvur`, detail: "Takımla yapılan iş hem yarışma hem akran puanı getirir.", points: 2, action: { label: "Yarışmayı incele", href: `/yarismalar/${openComp.id}` }, check: "apply_competition" });
-  if (approved < 2)
-    add({ title: "Staj amirinden ya da hocandan onay al", detail: "Kurumsal e-postadan gelen bir onay, deneyimini kanıtlı hale getirir.", points: 2, action: { label: "Onay iste", href: "/profil?onay=1" }, check: "reference" });
-  if (verifiedCerts < 3)
-    add({ title: `${target} alanında doğrulanabilir bir sertifika ekle`, detail: "BTK Akademi ya da Credly sertifikaları otomatik doğrulanır.", points: 1, action: { label: "Sertifika ekle", href: "/profil?sertifika=1" }, check: "certificate" });
-  if (hard < 2)
-    add({ title: "Zor seviyesinde bir proje bitir", detail: "Birden fazla servis, kuyruk ya da gerçek zamanlı bir özellik projeyi zor seviyesine taşır.", points: 2, action: { label: "Proje ekle", href: "/projeler?ekle=1" }, check: "project_hard" });
-  if (profile.about.length < 120)
-    add({ title: "Hakkında bölümünü genişlet", detail: "Ne üzerinde çalışmayı sevdiğini iki üç cümleyle anlat.", points: 1, action: { label: "Profili düzenle", href: "/profil?duzenle=1" }, check: "about" });
-  add({ title: "Bitirdiğin bir yarışmada takım arkadaşlarını puanla", detail: "Akran puanı karşılıklı işler; sen de puan verdiğinde sistem daha adil olur.", points: 1, action: { label: "Yarışmalar", href: "/yarismalar" }, check: "peer_rating" });
+  if (missing.length) add("project_any", `${missing[0]} kullanan bir ${target} projesi ekle`, `${target} hedefin için ${missing[0]} kanıtı eksik. Küçük ama bitmiş bir proje yeter.`);
+  if (base.testedProjects <= base.hardProjects || base.testedProjects < 2)
+    add("project_tests", "Testleri olan bir proje ekle", "Projelerinin çoğunda test yok. Testli bir proje, kalite puanını doğrudan artırır.");
+  if (openComp) add("apply_competition", `${openComp.code} ${openComp.title} yarışmasında ${target} pozisyonuna başvur`, "Takımla yapılan iş hem yarışma hem akran puanı getirir.", `/yarismalar/${openComp.id}`);
+  if (references.filter((r) => r.status === "Onaylandı").length < 2)
+    add("reference", "Staj amirinden ya da hocandan onay al", "Kurumsal e-postadan gelen bir onay, deneyimini kanıtlı hale getirir.");
+  if (certs.filter((c) => c.status === "Doğrulandı").length < 3) add("certificate", `${target} alanında doğrulanabilir bir sertifika ekle`, "BTK Akademi ya da Credly sertifikaları otomatik doğrulanır.");
+  if (projects.filter((p) => p.analysis.difficulty === "Zor").length < 2)
+    add("project_hard", "Zor seviyesinde bir proje bitir", "Birden fazla servis, kuyruk ya da gerçek zamanlı bir özellik projeyi zor seviyesine taşır.");
+  if (profile.about.length < 120) add("about", "Hakkında bölümünü genişlet", "Ne üzerinde çalışmayı sevdiğini iki üç cümleyle anlat.");
+  add("peer_rating", "Bitirdiğin bir yarışmada takım arkadaşlarını puanla", "Akran puanı karşılıklı işler; sen de puan verdiğinde sistem daha adil olur.");
 
   const picked = steps.slice(0, 6);
-  // Adım puanı + adımın kendisinin getireceği puan (proje, onay vb.) için kaba tahmin.
   const summary =
     `${target} hedefin için en büyük eksik ${missing.length ? missing.slice(0, 2).join(" ve ") + " kanıtı" : "projelerinin kalitesi"}. ` +
     `Aşağıdaki ${picked.length} adım seni yaklaşık ${picked.reduce((a, s) => a + s.points, 0) + 15} puan ileri taşır.`;
 
-  return {
-    target,
-    generatedAt: new Date().toISOString(),
-    summary,
-    steps: picked,
-    baseline: {
-      projects: projects.length,
-      testedProjects: tested,
-      hardProjects: hard,
-      applications: Object.keys(ctx.applications).length,
-      certs: verifiedCerts,
-      references: approved,
-      peerGiven: ctx.peerGivenCount,
-    },
-  };
+  return { target, summary, steps: picked, baseline: base };
 }

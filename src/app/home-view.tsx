@@ -7,7 +7,7 @@ import { PulseLine } from "@/components/brand";
 import { PageShell, Pill } from "@/components/page-shell";
 import { btn } from "@/lib/btn";
 import { levelOf } from "@/lib/score";
-import { useApp, useHydrated } from "@/lib/store";
+import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 const DEMO_REPOS = [
@@ -19,9 +19,8 @@ const DEMO_REPOS = [
 ];
 
 function AuthButtons({ size = "lg" as const }) {
-  const hydrated = useHydrated();
   const session = useApp((s) => s.session);
-  if (hydrated && session)
+  if (session)
     return (
       <Link href="/profil" className={btn("primary", size)}>
         Profiline dön →

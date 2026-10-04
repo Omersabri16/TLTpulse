@@ -6,7 +6,8 @@ import { useState } from "react";
 import { Container, PageHero, PageShell } from "@/components/page-shell";
 import { TagInput } from "@/components/tag-input";
 import { btn, inputClass } from "@/lib/btn";
-import { useApp } from "@/lib/store";
+import { saveProfile } from "@/app/actions/profile";
+import { useAct, useApp } from "@/lib/store";
 import { FIELDS, type Field } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +22,8 @@ const SKILLS: Record<Field, string[]> = {
 
 function Onboarding() {
   const profile = useApp((s) => s.profile)!;
-  const update = useApp((s) => s.updateProfile);
+  const act = useAct();
+  const [busy, setBusy] = useState(false);
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [field, setField] = useState<Field | "">(profile.field);
@@ -35,19 +37,23 @@ function Onboarding() {
   const steps = ["Alan", "Eğitim", "GitHub ve beceriler"];
   const canNext = step === 0 ? !!field : step === 1 ? !!school : true;
 
-  const finish = () => {
-    update({
-      field,
-      headline: field ? `${field} geliştirici` : "",
-      school,
-      department,
-      city,
-      github: github.replace(/^@/, "").replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, ""),
-      skills: skills.map((name) => ({ name, proof: "Beyan" as const })),
-      interests,
-      education: school ? [{ school, department, start: "", end: "" }] : [],
-    });
-    router.push("/profil");
+  const finish = async () => {
+    setBusy(true);
+    const ok = await act(
+      saveProfile({
+        field,
+        headline: field ? `${field} geliştirici` : "",
+        school,
+        department,
+        city,
+        github,
+        skills,
+        interests,
+        education: school ? [{ school, department, start: "", end: "" }] : [],
+      }),
+    );
+    setBusy(false);
+    if (ok) router.push("/profil");
   };
 
   return (
@@ -137,8 +143,8 @@ function Onboarding() {
                 Devam →
               </button>
             ) : (
-              <button onClick={finish} className={btn("primary")}>
-                Profilime git →
+              <button onClick={finish} disabled={busy} className={btn("primary")}>
+                {busy ? "Kaydediliyor…" : "Profilime git →"}
               </button>
             )}
           </div>

@@ -1,12 +1,12 @@
 "use client";
 
-import { ExternalLink, MailCheck } from "lucide-react";
-import Link from "next/link";
+import { MailCheck } from "lucide-react";
 import { useState } from "react";
+import { requestApproval } from "@/app/actions/approvals";
 import { Choice, Field, Modal } from "@/components/modal";
 import { btn, inputClass } from "@/lib/btn";
 import { isCorporateEmail } from "@/lib/score";
-import { useApp } from "@/lib/store";
+import { useAct, useApp } from "@/lib/store";
 import type { ExperienceKind, Relation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -25,8 +25,8 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
   const profile = useApp((s) => s.profile);
   const projects = useApp((s) => s.projects);
   const references = useApp((s) => s.references);
-  const requestReference = useApp((s) => s.requestReference);
-  const addExperience = useApp((s) => s.addExperience);
+  const act = useAct();
+  const [busy, setBusy] = useState(false);
 
   const experiences = profile?.experiences ?? [];
   const [target, setTarget] = useState(() => preset ?? (experiences[0] ? `exp:${experiences[0].id}` : NEW));
@@ -39,35 +39,28 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
   const [approverEmail, setApproverEmail] = useState("");
   const [relation, setRelation] = useState<Relation>("Staj amiri");
   const [err, setErr] = useState("");
-  const [token, setToken] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
 
 
-  const send = () => {
+  const send = async () => {
     const email = approverEmail.trim().toLowerCase();
     if (!approverName.trim()) return setErr("Onaylayacak kişinin adını yaz.");
     if (!/\S+@\S+\.\S+/.test(email)) return setErr("Geçerli bir e-posta gir.");
     if (email === profile?.email.toLowerCase()) return setErr("Kendi e-postanı onaylayıcı olarak giremezsin.");
     if (references.filter((r) => r.approverEmail.toLowerCase() === email).length >= 3) return setErr("Aynı kişiden en fazla 3 onay istenebilir.");
-
-    let targetType: "experience" | "project" = "experience";
-    let targetId = "";
-    let targetLabel = "";
-    if (target === NEW) {
-      if (!title.trim() || !org.trim()) return setErr("Deneyimin unvanını ve kurumunu yaz.");
-      targetId = addExperience({ kind, title: title.trim(), org: org.trim(), start: start.trim(), end: end.trim() || "Devam ediyor" });
-      targetLabel = `${title.trim()} · ${org.trim()}`;
-    } else if (target.startsWith("exp:")) {
-      const e = experiences.find((x) => `exp:${x.id}` === target)!;
-      targetId = e.id;
-      targetLabel = `${e.title} · ${e.org}`;
-    } else {
-      const p = projects.find((x) => `prj:${x.id}` === target)!;
-      targetType = "project";
-      targetId = p.id;
-      targetLabel = `${p.name} projesi`;
-    }
+    if (target === NEW && (!title.trim() || !org.trim())) return setErr("Deneyimin unvanını ve kurumunu yaz.");
     setErr("");
-    setToken(requestReference({ targetType, targetId, targetLabel, approverName: approverName.trim(), approverEmail: email, relation }));
+
+    const t =
+      target === NEW
+        ? { type: "new" as const, kind, title, org, start, end }
+        : target.startsWith("exp:")
+          ? { type: "experience" as const, id: target.slice(4) }
+          : { type: "project" as const, id: target.slice(4) };
+    setBusy(true);
+    const ok = await act(requestApproval({ target: t, approverName, approverEmail: email, relation }));
+    setBusy(false);
+    if (ok) setSent(true);
   };
 
   const corporate = approverEmail.includes("@") && isCorporateEmail(approverEmail);
@@ -76,11 +69,11 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
     <Modal
       open
       onOpenChange={onOpenChange}
-      title={token ? "Onay isteği gönderildi" : "Onay iste"}
-      description={token ? undefined : "Stajını, işini ya da projeni amirin veya hocan onaylasın. Ona e-postayla bir link gider."}
+      title={sent ? "Onay isteği gönderildi" : "Onay iste"}
+      description={sent ? undefined : "Stajını, işini ya da projeni amirin veya hocan onaylasın. Ona e-postayla bir link gider."}
       className="sm:max-w-xl"
     >
-      {token ? (
+      {sent ? (
         <div className="grid gap-5">
           <div className="flex gap-3 rounded-2xl bg-ok-bg p-4 text-sm text-ok">
             <MailCheck className="mt-0.5 size-5 shrink-0" />
@@ -88,12 +81,7 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
               <b>{approverName}</b> adlı kişiye ({approverEmail}) onay linki gönderildi. Onaylayınca profilinde &quot;Onaylı&quot; etiketi ve yorumu görünecek, puanın artacak.
             </p>
           </div>
-          <div className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
-            Demo: e-posta yerine onay sayfasını buradan açabilirsin.
-            <Link href={`/onay/${token}`} target="_blank" className={btn("outline", "sm", "mt-3 w-full")}>
-              Onaylayıcının göreceği sayfayı aç <ExternalLink />
-            </Link>
-          </div>
+          <p className="text-sm text-muted-foreground">Link 14 gün geçerli ve tek kullanımlık. Sadece onaylayacak kişinin e-postasına gider; sana gösterilmez.</p>
           <div className="flex justify-end">
             <button onClick={() => onOpenChange(false)} className={btn("primary")}>
               Tamam
@@ -155,7 +143,9 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
             <button type="button" onClick={() => onOpenChange(false)} className={btn("ghost")}>
               Vazgeç
             </button>
-            <button className={btn("primary")}>Onay linkini gönder</button>
+            <button disabled={busy} className={btn("primary")}>
+              {busy ? "Gönderiliyor…" : "Onay linkini gönder"}
+            </button>
           </div>
         </form>
       )}

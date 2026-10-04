@@ -1,26 +1,14 @@
-"use client";
-
 import { BadgeCheck, CircleX } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { UserAvatar } from "@/components/brand";
 import { Card, Container, PageHero, PageShell, Pill } from "@/components/page-shell";
 import { btn } from "@/lib/btn";
-import { ME_USERNAME, USERS } from "@/lib/mock";
+import type { ProfileData } from "@/components/profile-view";
 import { levelLabel } from "@/lib/score";
-import { useApp } from "@/lib/store";
-import { cvCode, useProfileData } from "@/lib/use-profile-data";
+import { loadPublicProfile, usernameByCvCode } from "@/lib/server/public";
 
 /** QR'ın götürdüğü sayfa: CV'deki bilgiler gerçek mi? (kararlar.md Bölüm 7) */
-function Verify() {
-  const { kod } = useParams<{ kod: string }>();
-  const sessionUser = useApp((s) => s.session?.username);
-  const candidates = [ME_USERNAME, ...USERS.map((u) => u.username), ...(sessionUser ? [sessionUser] : [])];
-  const username = candidates.find((u) => cvCode(u) === kod.toUpperCase()) ?? "";
-  const { data, ready } = useProfileData(username);
-
-  if (!ready) return <div className="grid flex-1 place-items-center py-32 text-sm text-muted-foreground">Yükleniyor…</div>;
-
+function Verify({ kod, data }: { kod: string; data: ProfileData | null }) {
   if (!data)
     return (
       <>
@@ -106,10 +94,15 @@ function Item({ ok, text }: { ok: boolean; text: string }) {
   );
 }
 
-export default function Page() {
+export const metadata = { title: "CV doğrulama", robots: { index: false } };
+
+export default async function Page({ params }: PageProps<"/dogrula/[kod]">) {
+  const kod = decodeURIComponent((await params).kod).toUpperCase().slice(0, 20);
+  const username = await usernameByCvCode(kod);
+  const data = username ? await loadPublicProfile(username) : null;
   return (
     <PageShell>
-      <Verify />
+      <Verify kod={kod} data={data} />
     </PageShell>
   );
 }

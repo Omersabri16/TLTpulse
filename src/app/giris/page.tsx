@@ -3,22 +3,26 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { AuthCard, GoogleButton } from "@/components/auth-card";
+import { demoLogin, login } from "@/app/actions/auth";
+import { AuthCard, GoogleButton, OrDivider } from "@/components/auth-card";
 import { btn, inputClass } from "@/lib/btn";
 import { safeNext } from "@/lib/safe";
-import { useApp } from "@/lib/store";
+import { useAct } from "@/lib/store";
 
 function LoginForm() {
-  const login = useApp((s) => s.login);
+  const act = useAct();
   const router = useRouter();
-  const next = useSearchParams().get("next") || "/profil";
+  const params = useSearchParams();
+  const next = safeNext(params.get("next"));
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
-  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const go = () => {
-    login(email);
-    router.push(safeNext(next));
+  const done = (ok: unknown) => {
+    setBusy(false);
+    if (!ok) return;
+    router.replace(next);
+    router.refresh();
   };
 
   return (
@@ -34,31 +38,45 @@ function LoginForm() {
         </>
       }
     >
-      <GoogleButton onClick={go} />
-      <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" /> ya da e-posta ile <span className="h-px flex-1 bg-border" />
-      </div>
+      {params.get("hata") === "link" && (
+        <p className="mb-4 rounded-2xl bg-destructive/10 p-3 text-sm text-destructive">Linkin süresi dolmuş ya da daha önce kullanılmış. Tekrar giriş yap ya da yeni link iste.</p>
+      )}
+      <GoogleButton next={next} />
+      <OrDivider />
       <form
         className="grid gap-3"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (!/\S+@\S+\.\S+/.test(email)) return setErr("Geçerli bir e-posta gir.");
-          if (pw.length < 6) return setErr("Şifre en az 6 karakter olmalı.");
-          go();
+          setBusy(true);
+          done(await act(login({ email, password: pw })));
         }}
       >
         <label className="grid gap-1.5 text-sm font-medium">
           E-posta
-          <input className={inputClass} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ornek@mail.com" />
+          <input className={inputClass} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ornek@mail.com" />
         </label>
         <label className="grid gap-1.5 text-sm font-medium">
-          Şifre
-          <input className={inputClass} type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••" />
+          <span className="flex items-center justify-between">
+            Şifre
+            <Link href="/sifremi-unuttum" className="text-xs font-normal text-muted-foreground hover:text-foreground">
+              Şifremi unuttum
+            </Link>
+          </span>
+          <input className={inputClass} type="password" autoComplete="current-password" required value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" />
         </label>
-        {err && <p className="text-sm text-destructive">{err}</p>}
-        <button className={btn("primary", "lg", "mt-2 w-full")}>Giriş yap</button>
+        <button disabled={busy} className={btn("primary", "lg", "mt-2 w-full")}>
+          {busy ? "Giriş yapılıyor…" : "Giriş yap"}
+        </button>
       </form>
-      <button type="button" onClick={go} className="mt-4 w-full text-center text-xs text-muted-foreground hover:text-foreground">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          done(await act(demoLogin()));
+        }}
+        className="mt-4 w-full text-center text-xs text-muted-foreground hover:text-foreground"
+      >
         Demo hesabıyla gir (Deniz Kaya)
       </button>
     </AuthCard>

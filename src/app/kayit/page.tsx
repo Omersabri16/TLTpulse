@@ -1,19 +1,35 @@
 "use client";
 
+import { MailCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { AuthCard, GoogleButton } from "@/components/auth-card";
+import { register } from "@/app/actions/auth";
+import { AuthCard, GoogleButton, OrDivider } from "@/components/auth-card";
 import { btn, inputClass } from "@/lib/btn";
-import { useApp } from "@/lib/store";
+import { useAct } from "@/lib/store";
 
 export default function Page() {
-  const register = useApp((s) => s.register);
+  const act = useAct();
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
-  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sentTo, setSentTo] = useState("");
+
+  if (sentTo)
+    return (
+      <AuthCard title="Neredeyse bitti." subtitle="Hesabını açmak için e-postanı doğrula." footer={<Link href="/giris" className="font-semibold text-primary hover:underline">Giriş sayfasına dön</Link>}>
+        <div className="grid gap-4 text-center">
+          <MailCheck className="mx-auto size-12 text-ok" />
+          <p className="text-sm">
+            <b>{sentTo}</b> adresine bir doğrulama linki gönderdik. Linke tıklayınca hesabın açılacak ve profilini doldurmaya başlayacaksın.
+          </p>
+          <p className="text-xs text-muted-foreground">E-posta birkaç dakikada gelmezse gereksiz (spam) klasörüne bak.</p>
+        </div>
+      </AuthCard>
+    );
 
   return (
     <AuthCard
@@ -28,40 +44,36 @@ export default function Page() {
         </>
       }
     >
-      <GoogleButton
-        onClick={() => {
-          register("Yeni Kullanıcı", "yeni@gmail.com");
-          router.push("/onboarding");
-        }}
-      />
-      <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" /> ya da e-posta ile <span className="h-px flex-1 bg-border" />
-      </div>
+      <GoogleButton next="/onboarding" />
+      <OrDivider />
       <form
         className="grid gap-3"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (name.trim().split(" ").length < 2) return setErr("Adını ve soyadını yaz.");
-          if (!/\S+@\S+\.\S+/.test(email)) return setErr("Geçerli bir e-posta gir.");
-          if (pw.length < 6) return setErr("Şifre en az 6 karakter olmalı.");
-          register(name.trim(), email.trim());
-          router.push("/onboarding");
+          setBusy(true);
+          const res = await act(register({ name, email, password: pw }));
+          setBusy(false);
+          if (!res) return;
+          if (res.needsConfirm) return setSentTo(email.trim());
+          router.replace("/onboarding");
+          router.refresh();
         }}
       >
         <label className="grid gap-1.5 text-sm font-medium">
           Ad soyad
-          <input className={inputClass} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ayşe Yıldız" />
+          <input className={inputClass} autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ayşe Yıldız" />
         </label>
         <label className="grid gap-1.5 text-sm font-medium">
           E-posta
-          <input className={inputClass} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ornek@mail.com" />
+          <input className={inputClass} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ornek@mail.com" />
         </label>
         <label className="grid gap-1.5 text-sm font-medium">
           Şifre
-          <input className={inputClass} type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="En az 6 karakter" />
+          <input className={inputClass} type="password" autoComplete="new-password" required minLength={8} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="En az 8 karakter" />
         </label>
-        {err && <p className="text-sm text-destructive">{err}</p>}
-        <button className={btn("primary", "lg", "mt-2 w-full")}>Kayıt ol</button>
+        <button disabled={busy} className={btn("primary", "lg", "mt-2 w-full")}>
+          {busy ? "Hesap açılıyor…" : "Kayıt ol"}
+        </button>
       </form>
     </AuthCard>
   );

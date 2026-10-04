@@ -10,6 +10,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Dev modunda aksiyon argümanları (şifreler dahil) terminale yazılmasın.
+  logging: { serverFunctions: false },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

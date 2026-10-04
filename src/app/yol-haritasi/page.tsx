@@ -3,11 +3,13 @@
 import { Check, CircleCheck, Circle, Flag, Loader2, Lock, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { createRoadmap } from "@/app/actions/roadmap";
 import { Card, Container, PageHero, PageShell, Pill } from "@/components/page-shell";
 import { Progress } from "@/components/ui/progress";
 import { btn, inputClass } from "@/lib/btn";
-import { completeness, generateRoadmap, ROADMAP_MIN } from "@/lib/score";
-import { useApp, useMyScore } from "@/lib/store";
+import { completeness, ROADMAP_MIN } from "@/lib/score";
+import { useAct, useApp, useMyScore } from "@/lib/store";
 import { FIELDS, type Field } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -16,13 +18,9 @@ const STAGES = ["Profilin okunuyor", "Projelerin ve kanıtların inceleniyor", "
 function Roadmap() {
   const profile = useApp((s) => s.profile)!;
   const projects = useApp((s) => s.projects);
-  const certs = useApp((s) => s.certs);
-  const references = useApp((s) => s.references);
-  const applications = useApp((s) => s.applications);
-  const peerGiven = useApp((s) => s.peerGiven);
   const roadmap = useApp((s) => s.roadmap);
-  const setRoadmap = useApp((s) => s.setRoadmap);
   const score = useMyScore();
+  const act = useAct();
 
   const [target, setTarget] = useState<Field>((profile.field || roadmap?.target || "Backend") as Field);
   const [loading, setLoading] = useState(false);
@@ -30,25 +28,26 @@ function Roadmap() {
 
   const comp = completeness(profile, projects);
 
+  // AI çalışırken adımlar sırayla ilerler; son adım cevap gelince tamamlanır.
   useEffect(() => {
     if (!loading) return;
-    const timers = STAGES.map((_, i) => setTimeout(() => setStage(i + 1), 600 * (i + 1)));
-    const done = setTimeout(() => {
-      setRoadmap(generateRoadmap({ profile, projects, certs, references, applications, peerGivenCount: Object.keys(peerGiven).length }, target));
-      setLoading(false);
-    }, 600 * STAGES.length + 300);
-    return () => [...timers, done].forEach(clearTimeout);
-  }, [loading, profile, projects, certs, references, applications, peerGiven, target, setRoadmap]);
+    const timers = STAGES.slice(0, -1).map((_, i) => setTimeout(() => setStage((s) => Math.max(s, i + 1)), 900 * (i + 1)));
+    return () => timers.forEach(clearTimeout);
+  }, [loading]);
 
   const nextLevel = score.level === "Yeni başlayan" ? "Orta" : "Kıdemli";
   const goal = score.level === "Yeni başlayan" ? 60 : 80;
   const doneCount = roadmap ? roadmap.steps.filter((s) => score.roadmapDone.includes(s.id)).length : 0;
   const firstOpen = roadmap?.steps.find((s) => !score.roadmapDone.includes(s.id))?.id;
-  const rmPart = score.parts.find((p) => p.source === "Yol haritası")!;
+  const rmPart = score.parts.find((p) => p.source === "Yol haritası") ?? { points: 0 };
 
-  const start = () => {
+  const start = async () => {
     setStage(0);
     setLoading(true);
+    const res = await act(createRoadmap(target));
+    setStage(STAGES.length);
+    setLoading(false);
+    if (res && !res.ai) toast("Yol haritan hazır", { description: "AI şu an yanıt vermedi; adımlar kural tabanlı oluşturuldu." });
   };
 
   return (

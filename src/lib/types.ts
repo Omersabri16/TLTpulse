@@ -97,6 +97,10 @@ export interface Profile {
   department: string;
   city: string;
   github: string;
+  /** GitHub kullanıcı adının bu kişiye ait olduğu bio'daki kodla doğrulandı mı */
+  githubVerified: boolean;
+  /** Doğrulama için GitHub bio'ya yazılacak kod */
+  githubCode: string;
   about: string;
   interests: string[];
   skills: Skill[];
@@ -230,3 +234,54 @@ export interface PublicUser {
   interests: string[];
   projects: { name: string; techs: string[]; difficulty: Difficulty; description: string }[];
 }
+
+// ---------- Oturum sahibinin sunucudan gelen durumu ----------
+
+export interface MeScore {
+  total: number;
+  level: Level;
+  parts: { source: ScoreSource; points: number }[];
+  rank: { rank: number; of: number };
+  roadmapDone: string[];
+}
+
+export interface PersonRef {
+  username: string;
+  name: string;
+  field: string;
+}
+
+export interface CompetitionHistoryItem {
+  id: string;
+  label: string;
+  detail: string;
+}
+
+export interface ChatLine {
+  id: string;
+  from: string; // kullanıcı adı, "me" = oturum sahibi
+  text: string;
+  at: string;
+}
+
+export interface MeData {
+  session: { username: string } | null;
+  profile: Profile | null;
+  projects: Project[];
+  certs: Certificate[];
+  references: Reference[];
+  peerReceived: { from: string; competitionId: string; stars: number; note?: string }[];
+  peerGiven: Record<string, Record<string, number>>;
+  history: ScoreEvent[];
+  applications: Record<string, Field>;
+  roadmap: Roadmap | null;
+  conversations: Conversation[];
+  teamChats: Record<string, ChatLine[]>;
+  notifications: Notification[];
+  score: MeScore;
+  people: Record<string, PersonRef>;
+  competitionHistory: CompetitionHistoryItem[];
+}
+
+/** Sunucu aksiyonlarının ortak cevabı. */
+export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };

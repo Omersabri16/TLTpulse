@@ -7,20 +7,23 @@ import { Suspense, useState } from "react";
 import { UserAvatar } from "@/components/brand";
 import { ChatThread } from "@/components/chat";
 import { Container, PageHero, PageShell } from "@/components/page-shell";
-import { personOf } from "@/lib/competitions";
-import { useApp } from "@/lib/store";
+import { sendMessage } from "@/app/actions/competitions";
+import { useAct, useApp } from "@/lib/store";
+import { fmtClock } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 function Messages() {
   const conversations = useApp((s) => s.conversations);
-  const send = useApp((s) => s.sendMessage);
+  const people = useApp((s) => s.people);
+  const append = useApp((s) => s.appendMessage);
+  const act = useAct();
   const params = useSearchParams();
   const [active, setActive] = useState<string | null>(params.get("c") ?? conversations[0]?.id ?? null);
   const [mobileThread, setMobileThread] = useState(!!params.get("c"));
   const [q, setQ] = useState("");
 
   const list = conversations
-    .map((c) => ({ ...c, person: personOf(c.with) }))
+    .map((c) => ({ ...c, person: people[c.with] ?? { username: c.with, name: c.with, field: "" } }))
     .filter((c) => !q || c.person.name.toLocaleLowerCase("tr").includes(q.toLocaleLowerCase("tr")));
   const current = list.find((c) => c.id === active) ?? list[0];
 
@@ -78,7 +81,11 @@ function Messages() {
                 </header>
                 <ChatThread
                   messages={current.messages.map((m) => ({ id: m.id, mine: m.from === "me", text: m.text, at: m.at }))}
-                  onSend={(t) => send(current.id, t)}
+                  onSend={async (t) => {
+                    const res = await act(sendMessage({ conversationId: current.id, text: t }));
+                    if (res) append(current.id, { id: res.id, from: "me", text: t, at: fmtClock(res.at) });
+                    return !!res;
+                  }}
                 />
               </>
             ) : (

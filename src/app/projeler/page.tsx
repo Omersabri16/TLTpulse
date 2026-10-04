@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { removeProject } from "@/app/actions/projects";
 import { AddProjectDialog } from "@/components/add-project-dialog";
 import { Modal } from "@/components/modal";
 import { Container, PageHero, PageShell, Pill, Segmented } from "@/components/page-shell";
@@ -12,12 +13,12 @@ import { btn, inputClass } from "@/lib/btn";
 import { fmtDate } from "@/lib/competitions";
 import { safeHref } from "@/lib/safe";
 import { DIFFICULTY_POINTS, levelLabel, QUALITY_POINTS } from "@/lib/score";
-import { useApp, useMyScore } from "@/lib/store";
+import { useAct, useApp, useMyScore } from "@/lib/store";
 import type { Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function ProjectDetail({ project, onClose }: { project: Project | null; onClose: () => void }) {
-  const removeProject = useApp((s) => s.removeProject);
+  const act = useAct();
   if (!project) return null;
   const a = project.analysis;
   const checks = [
@@ -74,8 +75,8 @@ function ProjectDetail({ project, onClose }: { project: Project | null; onClose:
         </div>
         <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
           <button
-            onClick={() => {
-              removeProject(project.id);
+            onClick={async () => {
+              if (!(await act(removeProject(project.id)))) return;
               toast(`${project.name} kaldırıldı`);
               onClose();
             }}

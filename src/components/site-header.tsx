@@ -16,7 +16,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useApp, useHydrated } from "@/lib/store";
+import { logout } from "@/app/actions/auth";
+import { markNotificationsRead } from "@/app/actions/profile";
+import { useAct, useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 const MEMBER_LINKS = [
@@ -32,17 +34,21 @@ const GUEST_LINKS = [
 ];
 
 export function SiteHeader() {
-  const hydrated = useHydrated();
   const session = useApp((s) => s.session);
   const profile = useApp((s) => s.profile);
   const notifications = useApp((s) => s.notifications);
-  const markRead = useApp((s) => s.markNotificationsRead);
-  const logout = useApp((s) => s.logout);
+  const markAllRead = useApp((s) => s.markAllRead);
+  const act = useAct();
+  const markRead = () => {
+    if (!notifications.some((n) => !n.read)) return;
+    markAllRead();
+    void act(markNotificationsRead(), { silent: true });
+  };
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
-  const member = hydrated && !!session;
+  const member = !!session;
   const links = member ? MEMBER_LINKS : GUEST_LINKS;
   const unread = notifications.filter((n) => !n.read).length;
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"));
@@ -118,9 +124,10 @@ export function SiteHeader() {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     variant="destructive"
-                    onClick={() => {
-                      logout();
+                    onClick={async () => {
+                      await act(logout());
                       router.push("/");
+                      router.refresh();
                     }}
                   >
                     <LogOut /> Çıkış yap

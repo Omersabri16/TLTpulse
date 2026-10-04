@@ -4,9 +4,10 @@ import { Star } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/brand";
+import { ratePeers } from "@/app/actions/competitions";
 import { Modal } from "@/components/modal";
 import { btn } from "@/lib/btn";
-import { useApp } from "@/lib/store";
+import { useAct, useApp } from "@/lib/store";
 import type { Team } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,8 @@ const LABELS = ["", "Zayıf", "İdare eder", "İyi", "Çok iyi", "Harika"];
 
 export function PeerRatingDialog({ team, open, onOpenChange }: { team: Team; open: boolean; onOpenChange: (o: boolean) => void }) {
   const username = useApp((s) => s.session?.username);
-  const ratePeers = useApp((s) => s.ratePeers);
+  const act = useAct();
+  const [busy, setBusy] = useState(false);
   const mates = team.members.filter((m) => m.username !== username);
   const [stars, setStars] = useState<Record<string, number>>({});
   const ready = mates.every((m) => stars[m.username]);
@@ -54,15 +56,18 @@ export function PeerRatingDialog({ team, open, onOpenChange }: { team: Team; ope
           Vazgeç
         </button>
         <button
-          disabled={!ready}
-          onClick={() => {
-            ratePeers(team.id, stars);
+          disabled={!ready || busy}
+          onClick={async () => {
+            setBusy(true);
+            const ok = await act(ratePeers({ teamId: team.id, ratings: stars }));
+            setBusy(false);
+            if (!ok) return;
             toast.success("Puanların kaydedildi", { description: "Teşekkürler, akran puanı herkes için daha adil olur." });
             onOpenChange(false);
           }}
           className={btn("primary")}
         >
-          Gönder
+          {busy ? "Gönderiliyor…" : "Gönder"}
         </button>
       </div>
     </Modal>

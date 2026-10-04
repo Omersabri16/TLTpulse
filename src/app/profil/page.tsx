@@ -12,7 +12,6 @@ import { ProfileView } from "@/components/profile-view";
 import { ReferenceDialog } from "@/components/reference-dialog";
 import { Progress } from "@/components/ui/progress";
 import { btn } from "@/lib/btn";
-import { competitionHistory, personOf } from "@/lib/competitions";
 import { completeness } from "@/lib/score";
 import { useApp, useMyScore } from "@/lib/store";
 
@@ -22,6 +21,8 @@ function MyProfile() {
   const certs = useApp((s) => s.certs);
   const references = useApp((s) => s.references);
   const roadmap = useApp((s) => s.roadmap);
+  const people = useApp((s) => s.people);
+  const competitionHistory = useApp((s) => s.competitionHistory);
   const score = useMyScore();
   const params = useSearchParams();
   const router = useRouter();
@@ -38,7 +39,6 @@ function MyProfile() {
 
   const comp = completeness(profile, projects);
   const nextStep = roadmap?.steps.find((s) => !score.roadmapDone.includes(s.id));
-  const me = { username: profile.username, name: profile.name, field: profile.field };
 
   return (
     <>
@@ -49,8 +49,8 @@ function MyProfile() {
           projects: projects.map((p) => ({ id: p.id, name: p.name, techs: p.techs, description: p.description, difficulty: p.analysis.difficulty, quality: p.analysis.quality, points: p.analysis.points, repoUrl: p.repoUrl })),
           references,
           certs,
-          competitions: competitionHistory(profile.username),
-          connections: profile.connections.map((u) => personOf(u, me)),
+          competitions: competitionHistory,
+          connections: profile.connections.map((u) => people[u] ?? { username: u, name: u, field: "" }),
           score: score.total,
           level: score.level,
           rank: score.rank,
