@@ -1,6 +1,6 @@
 import "server-only";
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, type ContentListUnion, type GenerateContentConfig } from "@google/genai";
 import { z } from "zod";
 import { ROADMAP_CHECKS, STEP_RULES, TARGET_SKILLS, type RoadmapContext } from "@/lib/score";
 import type { Field, RoadmapCheck, RoadmapStep } from "@/lib/types";
@@ -31,7 +31,7 @@ const Output = z.object({
     .max(6),
 });
 
-const strip = (s: string) => s.replace(/[<>]/g, "").slice(0, 1000);
+export const strip = (s: string) => s.replace(/[<>]/g, "").slice(0, 1000);
 
 function profileBlock(ctx: RoadmapContext, target: Field) {
   const p = ctx.profile;
@@ -51,23 +51,26 @@ function profileBlock(ctx: RoadmapContext, target: Field) {
   ].join("\n");
 }
 
-// Model yoğunsa (503) ya da kota dolduysa (429) sıradakine geçilir.
 const MODELS = () => [...new Set([process.env.GEMINI_MODEL || "gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest"])];
 
-async function generate(ai: GoogleGenAI, contents: string) {
+/** Gemini çağrısı; yoğunluk ya da kota hatasında sıradaki modele geçer. Anahtar yoksa null. */
+export async function generate(contents: ContentListUnion, config: () => GenerateContentConfig) {
+  if (!process.env.GEMINI_API_KEY) return null;
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   let last: unknown;
   for (const model of MODELS()) {
     try {
-      return await ai.models.generateContent({ model, contents, config: CONFIG() });
+      return await ai.models.generateContent({ model, contents, config: config() });
     } catch (e) {
       last = e;
-      if (!/"code":\s*(503|429|404)|UNAVAILABLE|RESOURCE_EXHAUSTED|NOT_FOUND/.test(e instanceof Error ? e.message : "")) throw e;
+      // Yoğunluk/kota/model yok ya da geçici ağ hatası: sıradaki modeli dene.
+      if (!/"code":\s*(503|429|404)|UNAVAILABLE|RESOURCE_EXHAUSTED|NOT_FOUND|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/.test(e instanceof Error ? e.message : "")) throw e;
     }
   }
   throw last;
 }
 
-const CONFIG = () => ({
+const CONFIG = (): GenerateContentConfig => ({
   systemInstruction: SYSTEM,
   temperature: 0.4,
   maxOutputTokens: 4096,
@@ -91,10 +94,9 @@ const CONFIG = () => ({
 });
 
 export async function aiRoadmap(ctx: RoadmapContext, target: Field, openComp: { id: string } | null): Promise<{ summary: string; steps: RoadmapStep[] } | null> {
-  if (!process.env.GEMINI_API_KEY) return null;
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const res = await generate(ai, profileBlock(ctx, target));
+    const res = await generate(profileBlock(ctx, target), CONFIG);
+    if (!res) return null;
     const parsed = Output.safeParse(JSON.parse(res.text ?? ""));
     if (!parsed.success) {
       console.error("[gemini] şemaya uymayan çıktı:", parsed.error.issues[0]?.message);
