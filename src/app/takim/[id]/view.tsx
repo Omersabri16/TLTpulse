@@ -1,19 +1,20 @@
 "use client";
 
-import { ArrowLeft, Check, GitBranch } from "lucide-react";
+import { ArrowLeft, Check, CircleCheck, CircleX, ExternalLink, FlaskConical, GitBranch } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/brand";
 import { ChatThread } from "@/components/chat";
-import { sendTeamMessage, submitTeamRepo } from "@/app/actions/competitions";
+import { runPublicTests, sendTeamMessage, submitTeamRepo } from "@/app/actions/competitions";
 import { Card, Container, PageHero, Pill } from "@/components/page-shell";
 import { btn, inputClass } from "@/lib/btn";
 import { daysBetween, fmtDate } from "@/lib/competitions";
+import { safeHref } from "@/lib/safe";
 import { parseRepoUrl } from "@/lib/score";
 import { useAct, useApp } from "@/lib/store";
-import { fmtClock } from "@/lib/time";
+import { dayEnded, fmtClock } from "@/lib/time";
 import type { Competition, Team } from "@/lib/types";
 
 const NO_CHAT: never[] = [];
@@ -25,7 +26,10 @@ export function TeamRoom({ data }: { data: { team: Team; competition: Competitio
   const append = useApp((s) => s.appendTeamMessage);
   const act = useAct();
   const router = useRouter();
-  const [repo, setRepo] = useState("");
+  const [repo, setRepo] = useState(data?.team.repoUrl ?? "");
+  const [demo, setDemo] = useState(data?.team.demoUrl ?? "");
+  const [editing, setEditing] = useState(false);
+  const [running, setRunning] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -42,7 +46,7 @@ export function TeamRoom({ data }: { data: { team: Team; competition: Competitio
       </Container>
     );
 
-  const finished = c.status === "Tamamlandı";
+  const open = c.status === "Devam ediyor" && !dayEnded(c.end);
   const repoUrl = team.repoUrl;
   const nameOf = (u: string) => team.members.find((m) => m.username === u)?.name ?? u;
   const left = daysBetween(new Date().toISOString(), c.end);
@@ -91,9 +95,11 @@ export function TeamRoom({ data }: { data: { team: Team; competition: Competitio
           </Card>
 
           <Card>
-            <h2 className="mb-1 font-semibold">GitHub teslimi</h2>
-            <p className="mb-4 text-sm text-muted-foreground">{finished ? "Yarışma bitti." : `Teslim ${fmtDate(c.end)} · ${left > 0 ? `${left} gün kaldı` : "bugün"}`}</p>
-            {repoUrl ? (
+            <h2 className="mb-1 font-semibold">Teslim</h2>
+            <p className="mb-4 text-sm text-muted-foreground">
+              {open ? `Son teslim ${fmtDate(c.end)} 23:59 · ${left > 0 ? `${left} gün kaldı` : "bugün"}. O anki son commit dondurulur.` : "Teslim süresi doldu."}
+            </p>
+            {repoUrl && !editing ? (
               <div className="grid gap-3">
                 <Pill tone="ok" className="w-fit">
                   <Check className="size-3" /> Teslim edildi
@@ -101,6 +107,16 @@ export function TeamRoom({ data }: { data: { team: Team; competition: Competitio
                 <a href={repoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold break-all text-primary hover:underline">
                   <GitBranch className="size-4 shrink-0" /> {repoUrl.replace("https://github.com/", "")}
                 </a>
+                {safeHref(team.demoUrl) && (
+                  <a href={safeHref(team.demoUrl)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm break-all text-primary hover:underline">
+                    <ExternalLink className="size-4 shrink-0" /> {team.demoUrl}
+                  </a>
+                )}
+                {open && (
+                  <button onClick={() => setEditing(true)} className={btn("ghost", "sm", "w-fit")}>
+                    Linkleri değiştir
+                  </button>
+                )}
               </div>
             ) : (
               <form
@@ -108,23 +124,61 @@ export function TeamRoom({ data }: { data: { team: Team; competition: Competitio
                 onSubmit={async (e) => {
                   e.preventDefault();
                   if (!parseRepoUrl(repo)) return setErr("Geçerli bir GitHub repo linki gir.");
+                  if (!/^https:\/\//.test(demo.trim())) return setErr("Demo linki https:// ile başlamalı (ör. Vercel adresi).");
                   setErr("");
                   setBusy(true);
-                  const ok = await act(submitTeamRepo({ teamId: id, repoUrl: repo }));
+                  const ok = await act(submitTeamRepo({ teamId: id, repoUrl: repo, demoUrl: demo.trim() }));
                   setBusy(false);
                   if (!ok) return;
-                  toast.success("Teslim alındı", { description: "Tarih damgası atıldı; bu iş profilinde yarışma kanıtı olarak görünecek." });
+                  setEditing(false);
+                  toast.success("Teslim alındı", { description: "Süre bitene kadar değiştirebilirsin; testler demo linkine karşı çalışır." });
                   router.refresh();
                 }}
               >
-                <input className={inputClass} value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="https://github.com/takim/repo" />
+                <input className={inputClass} value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="https://github.com/takim/repo" aria-label="GitHub reposu" />
+                <input className={inputClass} value={demo} onChange={(e) => setDemo(e.target.value)} placeholder="https://takim.vercel.app" aria-label="Demo linki" />
+                <p className="text-xs text-muted-foreground">Repo yarışma başladıktan sonra açılmış olmalı; demo teslim anında açılmalı (Vercel ücretsiz).</p>
                 {err && <p className="text-sm text-destructive">{err}</p>}
-                <button disabled={busy || finished} className={btn("primary")}>
+                <button disabled={busy || !open} className={btn("primary")}>
                   {busy ? "Gönderiliyor…" : "Teslim et"}
                 </button>
               </form>
             )}
           </Card>
+
+          {open && (
+            <Card>
+              <h2 className="mb-1 font-semibold">Açık testler</h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Şartnamedeki {c.tests.filter((t) => t.public).length} açık testi demona karşı çalıştır (takım başına günde 3). Puanı gizli testler verir.
+              </p>
+              {team.publicRun && (
+                <ul className="mb-4 grid gap-1.5">
+                  {team.publicRun.tests.map((t) => (
+                    <li key={t.title} className="flex items-start gap-2 text-xs">
+                      {t.passed ? <CircleCheck className="size-3.5 shrink-0 text-ok" /> : <CircleX className="size-3.5 shrink-0 text-destructive" />} {t.title}
+                    </li>
+                  ))}
+                  <li className="pt-1 text-xs text-muted-foreground">
+                    Son deneme: {team.publicRun.passed}/{team.publicRun.total} · {fmtDate(team.publicRun.at)}
+                  </li>
+                </ul>
+              )}
+              <button
+                disabled={running || !team.demoUrl}
+                onClick={async () => {
+                  setRunning(true);
+                  const ok = await act(runPublicTests(id));
+                  setRunning(false);
+                  if (ok) toast.success("Testler başlatıldı", { description: "Birkaç dakika içinde sonuç bildirim olarak gelecek." });
+                }}
+                className={btn("outline", "md", "w-full")}
+              >
+                <FlaskConical /> {running ? "Başlatılıyor…" : "Açık testleri çalıştır"}
+              </button>
+              {!team.demoUrl && <p className="mt-2 text-xs text-muted-foreground">Önce demo linkini teslim et.</p>}
+            </Card>
+          )}
         </aside>
       </Container>
     </>

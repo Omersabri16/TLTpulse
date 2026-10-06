@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, LogOut, Menu, MessageSquare, Gauge, UserRound } from "lucide-react";
+import { Bell, LogOut, Menu, MessageSquare, Gauge, ShieldCheck, UserRound, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -36,6 +36,7 @@ const GUEST_LINKS = [
 export function SiteHeader() {
   const session = useApp((s) => s.session);
   const profile = useApp((s) => s.profile);
+  const isAdmin = useApp((s) => s.isAdmin);
   const notifications = useApp((s) => s.notifications);
   const markAllRead = useApp((s) => s.markAllRead);
   const act = useAct();
@@ -121,6 +122,14 @@ export function SiteHeader() {
                   <DropdownMenuItem onClick={() => router.push("/puan")}>
                     <Gauge /> Puanım
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push("/hesap")}>
+                    <ShieldCheck /> Hesap ve gizlilik
+                  </DropdownMenuItem>
+                  {isAdmin && (
+                    <DropdownMenuItem onClick={() => router.push("/yonetim")}>
+                      <Wrench /> Yönetim
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     variant="destructive"
@@ -164,9 +173,22 @@ export function SiteHeader() {
                   </Link>
                 ))}
                 {member ? (
-                  <Link href="/mesajlar" onClick={() => setOpen(false)} className="rounded-xl px-4 py-3 text-sm hover:bg-muted">
-                    Mesajlar
-                  </Link>
+                  <>
+                    <Link href="/mesajlar" onClick={() => setOpen(false)} className="rounded-xl px-4 py-3 text-sm hover:bg-muted">
+                      Mesajlar
+                    </Link>
+                    <Link href="/puan" onClick={() => setOpen(false)} className="rounded-xl px-4 py-3 text-sm hover:bg-muted">
+                      Puanım
+                    </Link>
+                    <Link href="/hesap" onClick={() => setOpen(false)} className="rounded-xl px-4 py-3 text-sm hover:bg-muted">
+                      Hesap ve gizlilik
+                    </Link>
+                    {isAdmin && (
+                      <Link href="/yonetim" onClick={() => setOpen(false)} className="rounded-xl px-4 py-3 text-sm hover:bg-muted">
+                        Yönetim
+                      </Link>
+                    )}
+                  </>
                 ) : (
                   <>
                     <Link href="/giris" onClick={() => setOpen(false)} className="rounded-xl px-4 py-3 text-sm hover:bg-muted">

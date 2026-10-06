@@ -15,3 +15,9 @@ export function fmtClock(iso: string, now = new Date()) {
 export function fmtRelative(iso: string, now = new Date()) {
   return now.getTime() - new Date(iso).getTime() < 60000 ? "Şimdi" : fmtClock(iso, now);
 }
+
+/** Kalan gün (geçmişse 0). */
+export const daysLeft = (iso: string, now = new Date()) => Math.max(0, Math.ceil((new Date(iso).getTime() - now.getTime()) / 86400000));
+
+/** Yarışma tarihi (YYYY-AA-GG) İstanbul saatiyle gün sonu geçti mi? */
+export const dayEnded = (day: string, now = new Date()) => new Date(`${day}T23:59:59+03:00`).getTime() < now.getTime();

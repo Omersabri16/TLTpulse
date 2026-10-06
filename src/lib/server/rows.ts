@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Certificate, Education, Experience, Field, Profile, Project, ProjectAnalysis, Reference, Skill } from "@/lib/types";
+import type { Certificate, Education, Experience, Field, Level, Profile, Project, ProjectAnalysis, Reference, Skill } from "@/lib/types";
 
 // Veritabanı satırları (snake_case) ve arayüz tiplerine dönüşümler.
 
@@ -22,12 +22,17 @@ export interface ProfileRow {
   education: Education[];
   cv_code: string;
   score: number;
-  seed_points: number;
+  league: Level;
+  season_points: number;
+  season_points_at: string | null;
+  is_admin: boolean;
+  suspended: boolean;
+  kvkk_accepted_at: string | null;
   created_at: string;
 }
 
 export const PROFILE_COLS =
-  "id, username, name, headline, field, school, department, city, github, github_verified, github_code, about, interests, skills, education, cv_code, score, seed_points, created_at";
+  "id, username, name, headline, field, school, department, city, github, github_verified, github_code, about, interests, skills, education, cv_code, score, league, season_points, season_points_at, is_admin, suspended, kvkk_accepted_at, created_at";
 
 export interface ExperienceRow {
   id: string;
@@ -59,10 +64,32 @@ export interface ProjectRow {
   role: Project["role"];
   language: string;
   demo_url: string | null;
-  analysis: ProjectAnalysis;
+  analysis: Partial<ProjectAnalysis>;
   points: number;
+  status: Project["status"];
+  commit_sha: string | null;
+  reasons: ProjectAnalysis["reasons"] | null;
   created_at: string;
 }
+
+export const PROJECT_COLS = "id, name, repo_owner, repo_name, description, techs, role, language, demo_url, analysis, points, status, commit_sha, reasons, created_at";
+
+/** Eski kayıtlarda olmayan alanlar varsayılanla doldurulur. */
+export const toAnalysis = (a: Partial<ProjectAnalysis>, points: number, reasons: ProjectAnalysis["reasons"] | null, sha: string | null): ProjectAnalysis => ({
+  difficulty: a.difficulty ?? "Kolay",
+  quality: a.quality ?? "Zayıf",
+  qualityPoints: a.qualityPoints ?? 0,
+  authorship: a.authorship ?? 0,
+  commits: a.commits ?? 0,
+  commitDays: a.commitDays ?? 0,
+  ownFiles: a.ownFiles ?? 0,
+  importedRatio: a.importedRatio ?? 0,
+  checks: { readme: false, tests: false, ci: false, demo: false, days: false, ...(a.checks ?? {}) },
+  points,
+  summary: a.summary ?? "",
+  reasons: reasons ?? a.reasons ?? [],
+  commitSha: sha ?? undefined,
+});
 
 export const toProject = (r: ProjectRow): Project => ({
   id: r.id,
@@ -74,7 +101,8 @@ export const toProject = (r: ProjectRow): Project => ({
   language: r.language,
   demoUrl: r.demo_url ?? undefined,
   addedAt: r.created_at,
-  analysis: { ...r.analysis, points: r.points },
+  status: r.status ?? "hazır",
+  analysis: toAnalysis(r.analysis ?? {}, r.points, r.reasons, r.commit_sha),
 });
 
 export interface CertRow {

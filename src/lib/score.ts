@@ -9,7 +9,6 @@ import type {
   Level,
   Profile,
   Project,
-  ProjectAnalysis,
   Quality,
   Reference,
   Roadmap,
@@ -20,10 +19,16 @@ import type {
 
 export const SOURCES: ScoreSource[] = ["Projeler", "Yarışmalar", "Akran puanı", "Sertifikalar", "Referanslar", "Yol haritası"];
 
-const PEER_POINTS_PER_COMPETITION = 15;
+// ---------- Lig ve sezon (kararlar.md Bölüm 5, "Sezonlu lig") ----------
 
-export const levelOf = (score: number): Level => (score >= 80 ? "Kıdemli" : score >= 60 ? "Orta" : "Yeni başlayan");
+/** Sezon sonunda her ligin ilk 20'si yükselir, Orta ve Kıdemli'nin son 20'si düşer. */
+export const PROMOTION_TOP = 20;
+/** Yükselmek için sezonda en az bu kadar puan gerekir; bu puanı alan düşmez. */
+export const MIN_SEASON_POINTS = 100;
+
 export const levelLabel = (l: Level) => (l === "Yeni başlayan" ? "Yeni başlayan ligi" : `${l} lig`);
+export const nextLevel = (l: Level): Level | null => (l === "Yeni başlayan" ? "Orta" : l === "Orta" ? "Kıdemli" : null);
+export const levelRank = (l: Level) => (l === "Yeni başlayan" ? 0 : l === "Orta" ? 1 : 2);
 
 /** Basit, deterministik hash (avatar rengi gibi görsel seçimler için; güvenlik için değil). */
 export function hash(s: string) {
@@ -35,150 +40,195 @@ export function hash(s: string) {
   return Math.abs(h);
 }
 
-// ---------- Proje analizi ----------
+// ---------- Proje puanı (kararlar.md Bölüm 5, "Proje değerlendirmesi") ----------
 
-export const DIFFICULTY_POINTS: Record<Difficulty, number> = { Kolay: 2, Orta: 4, Zor: 6 };
-export const QUALITY_POINTS: Record<Quality, number> = { Zayıf: 2, İyi: 3, "Çok iyi": 4 };
+/** Zorluğu AI sınıflandırır; puanı bu tablo verir. Kolay proje sabit 10, kalite sayılmaz. */
+export const DIFFICULTY_POINTS: Record<Difficulty, number> = { Kolay: 10, Orta: 40, Zor: 70 };
+/** Kalite (sadece Orta ve Zor): CI'da yeşil testler, açılan demo, anlamlı README, 10+ farklı günde geliştirme. */
+export const QUALITY_RULES = { ci: 12, demo: 8, readme: 4, days: 6 } as const;
 export const MIN_AUTHORSHIP = 10;
+/** Şablon dışı kendi kaynak dosyası bundan azsa proje eklenemez. */
+export const MIN_OWN_FILES = 10;
+/** Başka bir projeyle bu oranda ya da fazla aynı dosya varsa kopya sayılır. */
+export const COPY_RATIO = 0.5;
+/** İlk commit'le gelen kod bu oranı geçerse "içe aktarılmış" sayılır. */
+export const IMPORTED_RATIO = 0.6;
+export const MIN_COMMIT_DAYS = 10;
+export const MIN_README_CHARS = 300;
 
 export function parseRepoUrl(url: string): { owner: string; repo: string } | null {
   const m = url.trim().match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/);
   return m ? { owner: m[1], repo: m[2] } : null;
 }
 
-/** GitHub'dan okunan sinyaller. Kutucuklar kullanıcıdan değil repodan gelir. */
-export interface RepoSignals {
-  techs: number;
-  languages: number;
-  files: number;
-  commits: number;
-  role: "Tek başıma" | "Takımla";
-  readme: boolean;
-  tests: boolean;
+export interface ProjectSignals {
+  difficulty: Difficulty;
   ci: boolean;
   demo: boolean;
-  authorship: number;
+  readme: boolean;
+  commitDays: number;
+  importedRatio: number;
 }
 
-export function scoreRepo(s: RepoSignals): ProjectAnalysis {
-  const size =
-    s.techs +
-    (s.languages >= 3 ? 1 : 0) +
-    (s.files > 40 ? 1 : 0) +
-    (s.files > 150 ? 1 : 0) +
-    (s.role === "Tek başıma" ? 1 : 0) +
-    (s.commits > 90 ? 1 : 0);
-  const difficulty: Difficulty = size <= 3 ? "Kolay" : size <= 5 ? "Orta" : "Zor";
-  const q = [s.readme, s.tests, s.ci, s.demo, s.commits > 50].filter(Boolean).length;
-  const quality: Quality = q <= 1 ? "Zayıf" : q <= 3 ? "İyi" : "Çok iyi";
-  const points = DIFFICULTY_POINTS[difficulty] + QUALITY_POINTS[quality];
-
-  const plus: string[] = [];
-  const minus: string[] = [];
-  (s.tests ? plus : minus).push("test");
-  (s.ci ? plus : minus).push("CI");
-  (s.readme ? plus : minus).push("README");
-  if (s.demo) plus.push("canlı demo");
-  const summary =
-    `${s.files} dosya, ${s.commits} commit ve ${s.techs} teknolojiyle ${difficulty.toLowerCase()} bir proje.` +
-    (plus.length ? ` Artılar: ${plus.join(", ")}.` : "") +
-    (minus.length ? ` Eksik: ${minus.join(", ")}.` : "");
-
-  return {
-    difficulty,
-    quality,
-    authorship: s.authorship,
-    commits: s.commits,
-    checks: { readme: s.readme, tests: s.tests, ci: s.ci, demo: s.demo },
-    points,
-    summary,
-  };
+export function qualityPoints(s: Pick<ProjectSignals, "ci" | "demo" | "readme" | "commitDays">) {
+  return (s.ci ? QUALITY_RULES.ci : 0) + (s.demo ? QUALITY_RULES.demo : 0) + (s.readme ? QUALITY_RULES.readme : 0) + (s.commitDays >= MIN_COMMIT_DAYS ? QUALITY_RULES.days : 0);
 }
+
+export const qualityLabel = (qp: number): Quality => (qp >= 20 ? "Çok iyi" : qp >= 10 ? "İyi" : "Zayıf");
+
+/** 0–100. İçe aktarılmış projede puan, sonradan yazılan kodun oranıyla çarpılır. */
+export function projectPoints(s: ProjectSignals) {
+  const qp = qualityPoints(s);
+  const base = s.difficulty === "Kolay" ? DIFFICULTY_POINTS.Kolay : DIFFICULTY_POINTS[s.difficulty] + qp;
+  const factor = s.importedRatio > IMPORTED_RATIO ? 1 - s.importedRatio : 1;
+  return Math.round(base * factor);
+}
+
+// ---------- Yarışma puanı (kararlar.md Bölüm 5, "Yarışma değerlendirmesi") ----------
+
+export const COMPETITION_MAX: Record<Difficulty, number> = { Kolay: 100, Orta: 150, Zor: 200 };
+export const COVERAGE_WEIGHTS = { correctness: 0.6, quality: 0.25, teamwork: 0.15 } as const;
+/** Karşılama oranı bunun altındaysa puan yok. */
+export const MIN_COVERAGE = 0.5;
+/** Zorluğa göre takım büyüklüğü ve pozisyonlar. */
+export const TEAM_FIELDS: Record<Difficulty, Field[]> = {
+  Kolay: ["Frontend", "Backend"],
+  Orta: ["Frontend", "Backend", "Veritabanı"],
+  Zor: ["Frontend", "Backend", "Veritabanı", "DevOps"],
+};
+
+export const coverageOf = (correctness: number, quality: number, teamwork: number) =>
+  COVERAGE_WEIGHTS.correctness * correctness + COVERAGE_WEIGHTS.quality * quality + COVERAGE_WEIGHTS.teamwork * teamwork;
+
+export const teamPoints = (difficulty: Difficulty, coverage: number) => (coverage < MIN_COVERAGE ? 0 : Math.round(COMPETITION_MAX[difficulty] * Math.min(1, coverage)));
+
+/** Katkısı takım ortalamasının yarısının altındaysa katkısı oranında azalır; hiç commit'i yoksa 0. */
+export function personalPoints(team: number, commits: number, avgCommits: number) {
+  if (commits <= 0) return 0;
+  if (avgCommits <= 0 || commits >= avgCommits / 2) return team;
+  return Math.round(team * (commits / avgCommits));
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Takım çalışması (0–1): üyelerin katkısı dengeli mi (en az / en çok commit), commit'ler süreye yayılmış mı (hepsi son gece değil). */
+export function teamworkScore(memberCommits: number[], commitDays: number, lastTwoDaysShare: number) {
+  if (!memberCommits.length || Math.max(...memberCommits) === 0) return 0;
+  const balance = Math.min(...memberCommits) / Math.max(...memberCommits);
+  const spread = Math.min(1, commitDays / 7) * (lastTwoDaysShare > 0.8 ? 0.5 : 1);
+  return r2(0.6 * balance + 0.4 * spread);
+}
+
+/** Kalite (0–1): Lighthouse (erişilebilirlik, performans, mobil) %50, lint %20, npm audit %15, CI yeşil %15. Ölçülemeyen yarım puan. */
+export function qualityScore(q: { lighthouse?: { accessibility: number; performance: number; mobile: number } | null; lintErrors?: number | null; auditHigh?: number | null; ci?: boolean }) {
+  const lh = q.lighthouse ? (q.lighthouse.accessibility + q.lighthouse.performance + q.lighthouse.mobile) / 3 : 0;
+  const lint = q.lintErrors == null ? 0.5 : Math.max(0, 1 - q.lintErrors / 50);
+  const audit = q.auditHigh == null ? 0.5 : q.auditHigh === 0 ? 1 : Math.max(0, 1 - q.auditHigh / 5);
+  return r2(0.5 * lh + 0.2 * lint + 0.15 * audit + 0.15 * (q.ci ? 1 : 0));
+}
+
+/** Kalibrasyon: biten yarışmanın ortalama karşılama oranı. */
+export const calibrationOf = (avgCoverage: number) => (avgCoverage > 0.9 ? "Fazla kolay" : avgCoverage < 0.4 ? "Fazla zor" : "Dengeli");
+
+/**
+ * Takım kurma: her pozisyonun (güçlüden zayıfa sıralı) başvuranları takımlara yılan sırasıyla dağıtılır; 1. takım bir
+ * pozisyonda en güçlüyü alırsa sonraki pozisyonda en zayıfı alır. Takım sayısı = en az başvurulan pozisyonun sayısı.
+ */
+export function snakeDraft<T>(byField: T[][]): { teams: T[][]; substitutes: T[] } {
+  const n = byField.length ? Math.min(...byField.map((x) => x.length)) : 0;
+  const teams: T[][] = Array.from({ length: n }, () => []);
+  byField.forEach((sorted, k) => {
+    const order = k % 2 === 0 ? [...Array(n).keys()] : [...Array(n).keys()].reverse();
+    order.forEach((teamIdx, i) => teams[teamIdx].push(sorted[i]));
+  });
+  return { teams, substitutes: byField.flatMap((sorted) => sorted.slice(n)) };
+}
+
+// ---------- Akran ve mentor puanı ----------
+
+const PEER_POINTS_PER_COMPETITION = 30;
+/** Öneri olarak uygulandı (kararlar.md Bölüm 5, "Mentor puanı"): takımındaki Yeni başlayanlardan ortalama 4+ yıldız. */
+export const MENTOR_POINTS = 15;
+export const MENTOR_MIN_STARS = 4;
 
 // ---------- Sertifika doğrulama ----------
+
+/** Resmi kaynaktan doğrulanan BTK 20 / Credly 25; doğrulanamayan 5; isim uyuşmayan 0 (kararlar.md Bölüm 5). */
+export const CERT_POINTS = { "BTK Akademi": 20, Credly: 25, other: 5 } as const;
 
 /** Kural tabanlı kontrol (kararlar.md Bölüm 6). Resmi kaynaktan çekme ileride bunun yerini alacak. */
 export function verifyCertificate(provider: CertProvider, link: string, nameOnCert: string, profileName: string): { status: CertStatus; points: number } {
   const norm = (s: string) =>
     s.toLocaleLowerCase("tr").replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c").replace(/\s+/g, " ").trim();
-  const known = provider === "BTK Akademi" || provider === "Credly";
   let host = "";
   try {
     host = new URL(link).hostname.toLowerCase();
   } catch {
-    return { status: "Doğrulanamadı", points: 1 };
+    return { status: "Doğrulanamadı", points: CERT_POINTS.other };
   }
   const on = (d: string) => host === d || host.endsWith("." + d);
-  const linkOk =
-    (provider === "BTK Akademi" && on("btkakademi.gov.tr")) ||
-    (provider === "Credly" && on("credly.com")) ||
-    (provider === "Coursera" && on("coursera.org")) ||
-    (provider === "Udemy" && on("udemy.com"));
-  if (!linkOk) return { status: "Doğrulanamadı", points: 1 };
+  const official = (provider === "BTK Akademi" && on("btkakademi.gov.tr")) || (provider === "Credly" && on("credly.com"));
+  const known = (provider === "Coursera" && on("coursera.org")) || (provider === "Udemy" && on("udemy.com"));
   if (nameOnCert && norm(nameOnCert) !== norm(profileName)) return { status: "İsim uyuşmuyor", points: 0 };
-  return { status: "Doğrulandı", points: known ? 4 : 3 };
+  if (official) return { status: "Doğrulandı", points: CERT_POINTS[provider as "BTK Akademi" | "Credly"] };
+  return { status: known ? "Doğrulandı" : "Doğrulanamadı", points: CERT_POINTS.other };
 }
 
 // ---------- Referans ----------
 
 const PERSONAL = /@(gmail|hotmail|outlook|yahoo|icloud|yandex|protonmail|live|msn|aol|mail)\./i;
 export const isCorporateEmail = (email: string) => !PERSONAL.test(email);
-/** Kurumsal e-posta tam, kişisel e-posta düşük ağırlık; yorum yazılırsa +1. */
-export const referencePoints = (email: string, hasComment: boolean) => (isCorporateEmail(email) ? 5 : 2) + (hasComment ? 1 : 0);
+/** Kurumsal e-posta 30, kişisel e-posta 10; yorum yazılırsa +5. */
+export const referencePoints = (email: string, hasComment: boolean) => (isCorporateEmail(email) ? 30 : 10) + (hasComment ? 5 : 0);
 
-// ---------- Toplam puan ----------
+// ---------- Puan defteri ----------
 
-export interface CompetitionResult {
-  id: string;
-  code: string;
-  title: string;
-  rank?: number | null;
+/** Puan veren her kaynak bir kalem. Sunucu her kalemin beklenen puanını defterdeki toplamla karşılaştırıp farkı yazar. */
+export interface ScoreItem {
+  ref: string;
+  source: ScoreSource;
+  label: string;
+  points: number;
+  /** Yol haritası adımı: yol haritası yenilense de kazanılan puan geri alınmaz. */
+  sticky?: boolean;
 }
 
-export interface ScoreInput {
-  projects: { analysis: ProjectAnalysis }[];
-  certs: { points: number }[];
-  references: { status: Reference["status"]; points: number }[];
-  peerReceived: { stars: number; competitionId?: string }[];
-  completedCompetitions: CompetitionResult[];
-  roadmapDonePoints: number;
-}
+/** Bir yarışmadaki yıldızların ortalaması 30 üzerinden. */
+export const peerPointsFor = (stars: number[]) => (stars.length ? Math.round((stars.reduce((a, b) => a + b, 0) / stars.length / 5) * PEER_POINTS_PER_COMPETITION) : 0);
 
-export function competitionPoints(results: CompetitionResult[]) {
-  let pts = 0;
-  const items: { label: string; points: number; id: string }[] = [];
-  for (const c of results) {
-    const bonus = c.rank === 1 ? 8 : c.rank === 2 ? 6 : c.rank === 3 ? 4 : 0;
-    pts += 4 + bonus;
-    items.push({ id: c.id, label: `${c.code} ${c.title}${c.rank && c.rank <= 3 ? ` · ${c.rank}. takım` : " · katılım"}`, points: 4 + bonus });
-  }
-  return { points: pts, items };
-}
-
-/** Her yarışmada takım arkadaşlarının ortalaması 15 üzerinden; yarışmalar toplanır, genel sınır yok. */
+/** Yarışma yarışma akran puanı toplamı. */
 export function peerPoints(ratings: { stars: number; competitionId?: string }[]) {
   const by = new Map<string, number[]>();
-  for (const r of ratings) {
-    const k = r.competitionId ?? "";
-    by.set(k, [...(by.get(k) ?? []), r.stars]);
-  }
-  let pts = 0;
-  for (const stars of by.values()) pts += (stars.reduce((a, b) => a + b, 0) / stars.length / 5) * PEER_POINTS_PER_COMPETITION;
-  return Math.round(pts);
+  for (const r of ratings) by.set(r.competitionId ?? "", [...(by.get(r.competitionId ?? "") ?? []), r.stars]);
+  return [...by.values()].reduce((a, s) => a + peerPointsFor(s), 0);
 }
 
-export function computeScore(s: ScoreInput) {
-  const raw: Record<ScoreSource, number> = {
-    Projeler: s.projects.reduce((a, p) => a + p.analysis.points, 0),
-    Yarışmalar: competitionPoints(s.completedCompetitions).points,
-    "Akran puanı": peerPoints(s.peerReceived),
-    Sertifikalar: s.certs.reduce((a, c) => a + c.points, 0),
-    Referanslar: s.references.filter((r) => r.status === "Onaylandı").reduce((a, r) => a + r.points, 0),
-    "Yol haritası": s.roadmapDonePoints,
-  };
-  const parts = SOURCES.map((src) => ({ source: src, points: raw[src] }));
-  const total = parts.reduce((a, p) => a + p.points, 0);
-  return { total, level: levelOf(total), parts };
+export interface ScoreItemsInput {
+  projects: { id: string; name: string; points: number; status: string }[];
+  certs: { id: string; name: string; provider: string; points: number }[];
+  approvals: { id: string; label: string; approverName: string; status: string; points: number }[];
+  competitions: { id: string; code: string; title: string; points: number }[];
+  peer: { competitionId: string; code: string; stars: number[] }[];
+  mentor: { competitionId: string; code: string }[];
+  roadmap: { ref: string; label: string; points: number }[];
+}
+
+export function scoreItems(i: ScoreItemsInput): ScoreItem[] {
+  return [
+    ...i.projects.filter((p) => p.status === "hazır").map((p): ScoreItem => ({ ref: `project:${p.id}`, source: "Projeler", label: `${p.name} projesi`, points: p.points })),
+    ...i.certs.map((c): ScoreItem => ({ ref: `cert:${c.id}`, source: "Sertifikalar", label: `${c.provider} · ${c.name}`, points: c.points })),
+    ...i.approvals
+      .filter((a) => a.status === "Onaylandı")
+      .map((a): ScoreItem => ({ ref: `approval:${a.id}`, source: "Referanslar", label: `${a.approverName} onayladı: ${a.label}`, points: a.points })),
+    ...i.competitions.map((c): ScoreItem => ({ ref: `comp:${c.id}`, source: "Yarışmalar", label: `${c.code} ${c.title}`, points: c.points })),
+    ...i.peer.map((p): ScoreItem => ({ ref: `peer:${p.competitionId}`, source: "Akran puanı", label: `${p.code} takım arkadaşlarından`, points: peerPointsFor(p.stars) })),
+    ...i.mentor.map((m): ScoreItem => ({ ref: `mentor:${m.competitionId}`, source: "Akran puanı", label: `${m.code} mentor puanı`, points: MENTOR_POINTS })),
+    ...i.roadmap.map((r): ScoreItem => ({ ref: r.ref, source: "Yol haritası", label: r.label, points: r.points, sticky: true })),
+  ];
+}
+
+export function sumBySource(events: { source: ScoreSource; points: number }[]) {
+  return SOURCES.map((source) => ({ source, points: events.filter((e) => e.source === source).reduce((a, e) => a + e.points, 0) }));
 }
 
 // ---------- Lig ----------
@@ -189,7 +239,10 @@ export interface LeagueRow {
   school: string;
   city: string;
   field: Field;
+  league: Level;
+  /** Sezon puanı (lig sırası buna göre) */
   score: number;
+  total: number;
   trend: number;
   me?: boolean;
 }
@@ -247,14 +300,14 @@ export function stepDone(step: RoadmapStep, ctx: RoadmapContext, baseline: Roadm
 
 /** Adımın puanı ve kısayolu kural tablosundan gelir; AI sadece başlık ve açıklama önerir. */
 export const STEP_RULES: Record<RoadmapCheck, { points: number; action: { label: string; href: string } }> = {
-  project_any: { points: 2, action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
-  project_tests: { points: 2, action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
-  project_hard: { points: 2, action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
-  apply_competition: { points: 2, action: { label: "Yarışmalar", href: "/yarismalar" } },
-  certificate: { points: 1, action: { label: "Sertifika ekle", href: "/profil?sertifika=1" } },
-  reference: { points: 2, action: { label: "Onay iste", href: "/profil?onay=1" } },
-  peer_rating: { points: 1, action: { label: "Yarışmalar", href: "/yarismalar" } },
-  about: { points: 1, action: { label: "Profili düzenle", href: "/profil?duzenle=1" } },
+  project_any: { points: 10, action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
+  project_tests: { points: 10, action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
+  project_hard: { points: 10, action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
+  apply_competition: { points: 5, action: { label: "Yarışmalar", href: "/yarismalar" } },
+  certificate: { points: 5, action: { label: "Sertifika ekle", href: "/profil?sertifika=1" } },
+  reference: { points: 10, action: { label: "Onay iste", href: "/profil?onay=1" } },
+  peer_rating: { points: 5, action: { label: "Yarışmalar", href: "/yarismalar" } },
+  about: { points: 5, action: { label: "Profili düzenle", href: "/profil?duzenle=1" } },
 };
 export const ROADMAP_CHECKS = Object.keys(STEP_RULES) as RoadmapCheck[];
 
@@ -290,7 +343,7 @@ export function generateRoadmap(ctx: RoadmapContext, target: Field, openComp: { 
 
   if (missing.length) add("project_any", `${missing[0]} kullanan bir ${target} projesi ekle`, `${target} hedefin için ${missing[0]} kanıtı eksik. Küçük ama bitmiş bir proje yeter.`);
   if (base.testedProjects <= base.hardProjects || base.testedProjects < 2)
-    add("project_tests", "Testleri olan bir proje ekle", "Projelerinin çoğunda test yok. Testli bir proje, kalite puanını doğrudan artırır.");
+    add("project_tests", "Testleri olan bir proje ekle", "Projelerinin çoğunda CI'da çalışan test yok. Testleri CI'da yeşil geçen bir proje kalite puanına +12 ekler.");
   if (openComp) add("apply_competition", `${openComp.code} ${openComp.title} yarışmasında ${target} pozisyonuna başvur`, "Takımla yapılan iş hem yarışma hem akran puanı getirir.", `/yarismalar/${openComp.id}`);
   if (references.filter((r) => r.status === "Onaylandı").length < 2)
     add("reference", "Staj amirinden ya da hocandan onay al", "Kurumsal e-postadan gelen bir onay, deneyimini kanıtlı hale getirir.");
@@ -303,7 +356,7 @@ export function generateRoadmap(ctx: RoadmapContext, target: Field, openComp: { 
   const picked = steps.slice(0, 6);
   const summary =
     `${target} hedefin için en büyük eksik ${missing.length ? missing.slice(0, 2).join(" ve ") + " kanıtı" : "projelerinin kalitesi"}. ` +
-    `Aşağıdaki ${picked.length} adım seni yaklaşık ${picked.reduce((a, s) => a + s.points, 0) + 15} puan ileri taşır.`;
+    `Aşağıdaki ${picked.length} adım tamamlandıkça ${picked.reduce((a, s) => a + s.points, 0)} puan getirir; eklediğin projeler ve yarışmalar ayrıca puan kazandırır.`;
 
   return { target, summary, steps: picked, baseline: base };
 }

@@ -8,7 +8,7 @@ import { createRoadmap } from "@/app/actions/roadmap";
 import { Card, Container, PageHero, PageShell, Pill } from "@/components/page-shell";
 import { Progress } from "@/components/ui/progress";
 import { btn, inputClass } from "@/lib/btn";
-import { completeness, ROADMAP_MIN } from "@/lib/score";
+import { completeness, MIN_SEASON_POINTS, PROMOTION_TOP, ROADMAP_MIN } from "@/lib/score";
 import { useAct, useApp, useMyScore } from "@/lib/store";
 import { FIELDS, type Field } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -36,7 +36,7 @@ function Roadmap() {
   }, [loading]);
 
   const nextLevel = score.level === "Yeni başlayan" ? "Orta" : "Kıdemli";
-  const goal = score.level === "Yeni başlayan" ? 60 : 80;
+  const goal = MIN_SEASON_POINTS;
   const doneCount = roadmap ? roadmap.steps.filter((s) => score.roadmapDone.includes(s.id)).length : 0;
   const firstOpen = roadmap?.steps.find((s) => !score.roadmapDone.includes(s.id))?.id;
   const rmPart = score.parts.find((p) => p.source === "Yol haritası") ?? { points: 0 };
@@ -181,19 +181,21 @@ function Roadmap() {
             <h2 className="mt-10 text-3xl leading-tight font-semibold">
               Hedefin:
               <br />
-              {score.level === "Kıdemli" ? "Kıdemli ligde kal." : `${nextLevel} lig.`}
+              {score.level === "Kıdemli" ? "Sezon şampiyonluğu." : `${nextLevel} lig.`}
             </h2>
-            {score.level !== "Kıdemli" && (
-              <>
-                <div className="mt-6 flex items-center gap-3">
-                  <Progress value={(score.total / goal) * 100} className="flex-1" />
-                  <span className="text-sm text-on-navy-muted tabular-nums">
-                    {score.total}/{goal}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm text-on-navy-muted">{goal - score.total} puan kaldı.</p>
-              </>
-            )}
+            <p className="mt-3 text-sm text-on-navy-muted">
+              Sezonu ligindeki ilk {PROMOTION_TOP} içinde ve en az {goal} puanla bitir.
+            </p>
+            <div className="mt-6 flex items-center gap-3">
+              <Progress value={Math.min(100, (score.season / goal) * 100)} className="flex-1" />
+              <span className="text-sm text-on-navy-muted tabular-nums">
+                {score.season}/{goal}
+              </span>
+            </div>
+            <p className="mt-3 text-sm text-on-navy-muted">
+              {score.season < goal ? `${goal - score.season} puan kaldı · ` : ""}
+              Sıran: {score.rank.rank}. {score.rank.rank <= PROMOTION_TOP ? "(çizginin üstünde)" : `(çizgi ${PROMOTION_TOP}.)`}
+            </p>
             <Link href="/lig" className="mt-6 inline-block text-sm font-semibold text-cyan hover:underline">
               Ligimi gör ↗
             </Link>

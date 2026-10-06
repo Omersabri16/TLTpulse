@@ -1,13 +1,17 @@
 "use client";
 
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Flag, MoreHorizontal, Search, ShieldOff } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { UserAvatar } from "@/components/brand";
 import { ChatThread } from "@/components/chat";
 import { Container, PageHero, PageShell } from "@/components/page-shell";
+import { blockUser, unblockUser } from "@/app/actions/account";
 import { sendMessage } from "@/app/actions/competitions";
+import { ReportDialog, type ReportTarget } from "@/components/report-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import { useAct, useApp } from "@/lib/store";
 import { fmtClock } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -21,6 +25,8 @@ function Messages() {
   const [active, setActive] = useState<string | null>(params.get("c") ?? conversations[0]?.id ?? null);
   const [mobileThread, setMobileThread] = useState(!!params.get("c"));
   const [q, setQ] = useState("");
+  const blocked = useApp((s) => s.blocked);
+  const [report, setReport] = useState<ReportTarget | null>(null);
 
   const list = conversations
     .map((c) => ({ ...c, person: people[c.with] ?? { username: c.with, name: c.with, field: "" } }))
@@ -76,9 +82,35 @@ function Messages() {
                     <Link href={`/u/${current.with}`} className="font-semibold hover:underline">
                       {current.person.name}
                     </Link>
-                    <p className="text-xs text-muted-foreground">{current.person.field} · Bağlantın</p>
+                    <p className="text-xs text-muted-foreground">{current.person.field}</p>
                   </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="ml-auto grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-muted" aria-label="Sohbet işlemleri">
+                      <MoreHorizontal className="size-5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56 p-1">
+                      {(() => {
+                        const lastTheirs = [...current.messages].reverse().find((m) => m.from !== "me");
+                        return lastTheirs ? (
+                          <DropdownMenuItem onClick={() => setReport({ type: "Mesaj", id: lastTheirs.id, username: current.with, label: lastTheirs.text.slice(0, 80) })}>
+                            <Flag /> Son mesajını şikayet et
+                          </DropdownMenuItem>
+                        ) : null;
+                      })()}
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={async () => {
+                          if (blocked.includes(current.with)) {
+                            if (await act(unblockUser(current.with))) toast("Engel kaldırıldı");
+                          } else if (await act(blockUser(current.with))) toast(`${current.person.name} engellendi`, { description: "Sana mesaj atamaz." });
+                        }}
+                      >
+                        <ShieldOff /> {blocked.includes(current.with) ? "Engeli kaldır" : "Engelle"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </header>
+                {blocked.includes(current.with) && <p className="border-b bg-muted px-5 py-2 text-xs text-muted-foreground">Bu kişiyi engelledin; birbirinize mesaj gönderemezsiniz.</p>}
                 <ChatThread
                   messages={current.messages.map((m) => ({ id: m.id, mine: m.from === "me", text: m.text, at: m.at }))}
                   onSend={async (t) => {
@@ -94,6 +126,7 @@ function Messages() {
           </section>
         </div>
       </Container>
+      <ReportDialog target={report} onClose={() => setReport(null)} />
     </>
   );
 }

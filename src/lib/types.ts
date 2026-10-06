@@ -7,16 +7,34 @@ export const LEVELS: Level[] = ["Yeni başlayan", "Orta", "Kıdemli"];
 export type Difficulty = "Kolay" | "Orta" | "Zor";
 export type Quality = "Zayıf" | "İyi" | "Çok iyi";
 
-/** Kural tabanlı proje analizi sonucu (bkz. kararlar.md Bölüm 5). */
+/** AI'ın zorluk gerekçesi: özellik ve onu kanıtlayan dosya (sunucu dosyanın repoda olduğunu kontrol eder). */
+export interface DifficultyReason {
+  feature: string;
+  file: string;
+}
+
+/** Proje değerlendirmesi (kararlar.md Bölüm 5, "Proje değerlendirmesi"). Zorluğu AI sınıflandırır, puanı kural verir. */
 export interface ProjectAnalysis {
   difficulty: Difficulty;
   quality: Quality;
+  /** Kalite puanı (sadece Orta ve Zor'da sayılır, en fazla 30) */
+  qualityPoints: number;
   authorship: number; // commit yazarlığı yüzdesi
   commits: number;
-  checks: { readme: boolean; tests: boolean; ci: boolean; demo: boolean };
+  /** Kullanıcının commit attığı farklı gün sayısı */
+  commitDays: number;
+  /** Şablon dışı, kendine ait kaynak dosyası sayısı */
+  ownFiles: number;
+  /** İlk commit'le gelip hiç değişmeyen kodun oranı (0–1) */
+  importedRatio: number;
+  checks: { readme: boolean; tests: boolean; ci: boolean; demo: boolean; days: boolean };
   points: number;
   summary: string;
+  reasons: DifficultyReason[];
+  commitSha?: string;
 }
+
+export type ProjectStatus = "hazır" | "analiz bekliyor";
 
 export interface Project {
   id: string;
@@ -28,6 +46,7 @@ export interface Project {
   language: string;
   demoUrl?: string;
   addedAt: string;
+  status: ProjectStatus;
   analysis: ProjectAnalysis;
 }
 
@@ -115,12 +134,62 @@ export interface CompetitionPosition {
   applicants: number;
 }
 
-export type CompetitionStatus = "Başvurular açık" | "Devam ediyor" | "Tamamlandı";
+export type CompetitionStatus = "Taslak" | "Sırada" | "Başvurular açık" | "Devam ediyor" | "Değerlendiriliyor" | "Tamamlandı" | "İptal";
+
+/** Şartnamenin sabit arayüzü: gizli testler takımın demosunu dışarıdan denediği için herkes aynı uçları sunar. */
+export interface SpecEndpoint {
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  request?: string;
+  response: string;
+  note?: string;
+}
+
+export interface SpecTestId {
+  page: string;
+  id: string;
+  note: string;
+}
+
+export interface CompetitionSpec {
+  problem: string;
+  stories: string[];
+  api: SpecEndpoint[];
+  testIds: SpecTestId[];
+  rules: string[];
+}
+
+export interface SpecTest {
+  id: string;
+  title: string;
+  public: boolean;
+}
+
+export interface TeamResult {
+  hiddenPassed: number;
+  hiddenTotal: number;
+  tests: { id: string; title: string; passed: boolean; public: boolean }[];
+  correctness: number;
+  quality: number;
+  teamwork: number;
+  coverage: number;
+  points: number;
+  eliminated?: string;
+  details: {
+    lighthouse?: { accessibility: number; performance: number; mobile: number };
+    lintErrors?: number;
+    auditHigh?: number;
+    ci?: boolean;
+    contributions?: Record<string, number>;
+  };
+}
 
 export interface TeamMember {
   username: string;
   name: string;
   field: Field;
+  /** Yarışma tamamlandıysa kişisel puan */
+  points?: number;
 }
 
 export interface Team {
@@ -129,9 +198,11 @@ export interface Team {
   name: string;
   members: TeamMember[];
   repoUrl?: string;
+  demoUrl?: string;
   submitted?: boolean;
-  rank?: number;
-  juryScore?: number;
+  result?: TeamResult;
+  /** Açık testlerin son deneme sonucu */
+  publicRun?: { passed: number; total: number; at: string; tests: { title: string; passed: boolean }[] };
 }
 
 export interface Competition {
@@ -148,6 +219,13 @@ export interface Competition {
   applyDeadline: string;
   start: string;
   end: string;
+  difficulty: Difficulty;
+  maxPoints: number;
+  spec: CompetitionSpec | null;
+  tests: SpecTest[];
+  isDemo: boolean;
+  calibration?: string;
+  cancelReason?: string;
   teams: Team[];
 }
 
@@ -207,6 +285,7 @@ export interface ScoreEvent {
   source: ScoreSource;
   label: string;
   points: number;
+  seasonId?: number;
 }
 
 export type ScoreSource = "Projeler" | "Yarışmalar" | "Akran puanı" | "Sertifikalar" | "Referanslar" | "Yol haritası";
@@ -237,12 +316,40 @@ export interface PublicUser {
 
 // ---------- Oturum sahibinin sunucudan gelen durumu ----------
 
+export interface SeasonInfo {
+  id: number;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+}
+
 export interface MeScore {
+  /** Tüm zamanların toplamı */
   total: number;
+  /** Bu sezonun puanı = lig puanı */
+  season: number;
+  /** Kalıcı lig (sezon sonunda değişir) */
   level: Level;
+  /** Bu sezon kaynak kaynak */
   parts: { source: ScoreSource; points: number }[];
+  /** Tüm zamanlar kaynak kaynak */
+  allParts: { source: ScoreSource; points: number }[];
   rank: { rank: number; of: number };
   roadmapDone: string[];
+}
+
+export interface Badge {
+  kind: "Sezon şampiyonu" | "Mentor";
+  label: string;
+  at: string;
+}
+
+export interface CredentialItem {
+  id: string;
+  kind: "Yarışma" | "Sezon şampiyonu";
+  title: string;
+  status: "Beklemede" | "Gönderildi";
+  url?: string;
 }
 
 export interface PersonRef {
@@ -281,6 +388,15 @@ export interface MeData {
   score: MeScore;
   people: Record<string, PersonRef>;
   competitionHistory: CompetitionHistoryItem[];
+  season: SeasonInfo | null;
+  badges: Badge[];
+  credentials: CredentialItem[];
+  /** Kapanan sezonda lig değiştiyse ve henüz gösterilmediyse (konfeti) */
+  seasonResult: { seasonName: string; from: Level; to: Level; champion: boolean } | null;
+  isAdmin: boolean;
+  kvkkAccepted: boolean;
+  /** Engellediğin kullanıcı adları */
+  blocked: string[];
 }
 
 /** Sunucu aksiyonlarının ortak cevabı. */

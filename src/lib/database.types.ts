@@ -21,6 +21,7 @@ export type Database = {
           created_at: string
           field: string
           note: string | null
+          status: string
           user_id: string
         }
         Insert: {
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           field: string
           note?: string | null
+          status?: string
           user_id: string
         }
         Update: {
@@ -35,6 +37,7 @@ export type Database = {
           created_at?: string
           field?: string
           note?: string | null
+          status?: string
           user_id?: string
         }
         Relationships: [
@@ -116,6 +119,74 @@ export type Database = {
           },
         ]
       }
+      badges: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          label: string
+          ref: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          label: string
+          ref: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          label?: string
+          ref?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "badges_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blocks: {
+        Row: {
+          blocked_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          blocked_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          blocked_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       certificates: {
         Row: {
           created_at: string
@@ -160,49 +231,145 @@ export type Database = {
           },
         ]
       }
+      competition_results: {
+        Row: {
+          competition_id: string
+          correctness: number
+          coverage: number
+          created_at: string
+          details: Json
+          eliminated: string | null
+          hidden_passed: number
+          hidden_total: number
+          points: number
+          quality: number
+          team_id: string
+          teamwork: number
+          tests: Json
+        }
+        Insert: {
+          competition_id: string
+          correctness?: number
+          coverage?: number
+          created_at?: string
+          details?: Json
+          eliminated?: string | null
+          hidden_passed?: number
+          hidden_total?: number
+          points?: number
+          quality?: number
+          team_id: string
+          teamwork?: number
+          tests?: Json
+        }
+        Update: {
+          competition_id?: string
+          correctness?: number
+          coverage?: number
+          created_at?: string
+          details?: Json
+          eliminated?: string | null
+          hidden_passed?: number
+          hidden_total?: number
+          points?: number
+          quality?: number
+          team_id?: string
+          teamwork?: number
+          tests?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competition_results_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competition_results_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: true
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       competitions: {
         Row: {
           apply_deadline: string
           brief: string[]
+          calibration: string | null
+          cancel_reason: string | null
           code: string
+          created_at: string
           deliverables: string[]
           description: string
+          difficulty: string
           end_date: string
           id: string
+          is_demo: boolean
+          locked: boolean
           positions: Json
+          publish_on: string | null
+          spec: Json
+          spec_id: string | null
           start_date: string
           status: string
           tagline: string
+          tests: Json
+          tests_verified_at: string | null
           theme: string
           title: string
         }
         Insert: {
           apply_deadline: string
           brief?: string[]
+          calibration?: string | null
+          cancel_reason?: string | null
           code: string
+          created_at?: string
           deliverables?: string[]
           description?: string
+          difficulty?: string
           end_date: string
           id: string
+          is_demo?: boolean
+          locked?: boolean
           positions?: Json
+          publish_on?: string | null
+          spec?: Json
+          spec_id?: string | null
           start_date: string
           status: string
           tagline?: string
+          tests?: Json
+          tests_verified_at?: string | null
           theme?: string
           title: string
         }
         Update: {
           apply_deadline?: string
           brief?: string[]
+          calibration?: string | null
+          cancel_reason?: string | null
           code?: string
+          created_at?: string
           deliverables?: string[]
           description?: string
+          difficulty?: string
           end_date?: string
           id?: string
+          is_demo?: boolean
+          locked?: boolean
           positions?: Json
+          publish_on?: string | null
+          spec?: Json
+          spec_id?: string | null
           start_date?: string
           status?: string
           tagline?: string
+          tests?: Json
+          tests_verified_at?: string | null
           theme?: string
           title?: string
         }
@@ -277,6 +444,101 @@ export type Database = {
           },
         ]
       }
+      credentials: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: string
+          kind: string
+          last_error: string | null
+          ref: string
+          status: string
+          title: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          kind: string
+          last_error?: string | null
+          ref: string
+          status?: string
+          title: string
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: string
+          kind?: string
+          last_error?: string | null
+          ref?: string
+          status?: string
+          title?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credentials_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evaluation_runs: {
+        Row: {
+          competition_id: string
+          finished_at: string | null
+          id: string
+          kind: string
+          nonce_hash: string
+          requested_at: string
+          status: string
+          team_id: string | null
+        }
+        Insert: {
+          competition_id: string
+          finished_at?: string | null
+          id?: string
+          kind: string
+          nonce_hash: string
+          requested_at?: string
+          status?: string
+          team_id?: string | null
+        }
+        Update: {
+          competition_id?: string
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          nonce_hash?: string
+          requested_at?: string
+          status?: string
+          team_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluation_runs_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluation_runs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       experiences: {
         Row: {
           created_at: string
@@ -320,6 +582,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      gemini_usage: {
+        Row: {
+          count: number
+          day: string
+          kind: string
+        }
+        Insert: {
+          count?: number
+          day: string
+          kind: string
+        }
+        Update: {
+          count?: number
+          day?: string
+          kind?: string
+        }
+        Relationships: []
       }
       messages: {
         Row: {
@@ -472,11 +752,16 @@ export type Database = {
           headline: string
           id: string
           interests: string[]
+          is_admin: boolean
+          kvkk_accepted_at: string | null
+          league: string
           name: string
           school: string
           score: number
-          seed_points: number
+          season_points: number
+          season_points_at: string | null
           skills: Json
+          suspended: boolean
           username: string
         }
         Insert: {
@@ -493,11 +778,16 @@ export type Database = {
           headline?: string
           id: string
           interests?: string[]
+          is_admin?: boolean
+          kvkk_accepted_at?: string | null
+          league?: string
           name: string
           school?: string
           score?: number
-          seed_points?: number
+          season_points?: number
+          season_points_at?: string | null
           skills?: Json
+          suspended?: boolean
           username: string
         }
         Update: {
@@ -514,18 +804,85 @@ export type Database = {
           headline?: string
           id?: string
           interests?: string[]
+          is_admin?: boolean
+          kvkk_accepted_at?: string | null
+          league?: string
           name?: string
           school?: string
           score?: number
-          seed_points?: number
+          season_points?: number
+          season_points_at?: string | null
           skills?: Json
+          suspended?: boolean
           username?: string
         }
         Relationships: []
       }
+      project_analysis_cache: {
+        Row: {
+          commit_sha: string
+          created_at: string
+          difficulty: string
+          model: string
+          reasons: Json
+          repo: string
+        }
+        Insert: {
+          commit_sha: string
+          created_at?: string
+          difficulty: string
+          model?: string
+          reasons: Json
+          repo: string
+        }
+        Update: {
+          commit_sha?: string
+          created_at?: string
+          difficulty?: string
+          model?: string
+          reasons?: Json
+          repo?: string
+        }
+        Relationships: []
+      }
+      project_files: {
+        Row: {
+          blob_sha: string
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          blob_sha: string
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          blob_sha?: string
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_files_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           analysis: Json
+          analyzed_at: string | null
+          commit_sha: string | null
           created_at: string
           demo_url: string | null
           description: string
@@ -533,14 +890,18 @@ export type Database = {
           language: string
           name: string
           points: number
+          reasons: Json
           repo_name: string
           repo_owner: string
           role: string
+          status: string
           techs: string[]
           user_id: string
         }
         Insert: {
           analysis: Json
+          analyzed_at?: string | null
+          commit_sha?: string | null
           created_at?: string
           demo_url?: string | null
           description: string
@@ -548,14 +909,18 @@ export type Database = {
           language?: string
           name: string
           points?: number
+          reasons?: Json
           repo_name: string
           repo_owner: string
           role: string
+          status?: string
           techs?: string[]
           user_id: string
         }
         Update: {
           analysis?: Json
+          analyzed_at?: string | null
+          commit_sha?: string | null
           created_at?: string
           demo_url?: string | null
           description?: string
@@ -563,9 +928,11 @@ export type Database = {
           language?: string
           name?: string
           points?: number
+          reasons?: Json
           repo_name?: string
           repo_owner?: string
           role?: string
+          status?: string
           techs?: string[]
           user_id?: string
         }
@@ -584,24 +951,75 @@ export type Database = {
           action: string
           created_at: string
           id: number
-          user_id: string
+          key: string | null
+          user_id: string | null
         }
         Insert: {
           action: string
           created_at?: string
           id?: never
-          user_id: string
+          key?: string | null
+          user_id?: string | null
         }
         Update: {
           action?: string
           created_at?: string
           id?: never
-          user_id?: string
+          key?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "rate_events_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reports: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string
+          reporter_id: string | null
+          status: string
+          target_id: string
+          target_type: string
+          target_user: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason: string
+          reporter_id?: string | null
+          status?: string
+          target_id: string
+          target_type: string
+          target_user?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string
+          reporter_id?: string | null
+          status?: string
+          target_id?: string
+          target_type?: string
+          target_user?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_target_user_fkey"
+            columns: ["target_user"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -652,6 +1070,8 @@ export type Database = {
           id: string
           label: string
           points: number
+          ref: string | null
+          season_id: number | null
           source: string
           user_id: string
         }
@@ -660,6 +1080,8 @@ export type Database = {
           id?: string
           label: string
           points: number
+          ref?: string | null
+          season_id?: number | null
           source: string
           user_id: string
         }
@@ -668,10 +1090,19 @@ export type Database = {
           id?: string
           label?: string
           points?: number
+          ref?: string | null
+          season_id?: number | null
           source?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "score_events_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "score_events_user_id_fkey"
             columns: ["user_id"]
@@ -681,22 +1112,100 @@ export type Database = {
           },
         ]
       }
+      season_results: {
+        Row: {
+          champion: boolean
+          from_league: string
+          rank: number
+          season_id: number
+          season_points: number
+          seen: boolean
+          to_league: string
+          user_id: string
+        }
+        Insert: {
+          champion?: boolean
+          from_league: string
+          rank: number
+          season_id: number
+          season_points: number
+          seen?: boolean
+          to_league: string
+          user_id: string
+        }
+        Update: {
+          champion?: boolean
+          from_league?: string
+          rank?: number
+          season_id?: number
+          season_points?: number
+          seen?: boolean
+          to_league?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "season_results_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "season_results_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      seasons: {
+        Row: {
+          closed_at: string | null
+          ends_at: string
+          id: number
+          name: string
+          starts_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          ends_at: string
+          id: number
+          name: string
+          starts_at: string
+        }
+        Update: {
+          closed_at?: string | null
+          ends_at?: string
+          id?: number
+          name?: string
+          starts_at?: string
+        }
+        Relationships: []
+      }
       team_members: {
         Row: {
+          commits: number | null
           competition_id: string
           field: string
+          points: number
           team_id: string
           user_id: string
         }
         Insert: {
+          commits?: number | null
           competition_id: string
           field: string
+          points?: number
           team_id: string
           user_id: string
         }
         Update: {
+          commits?: number | null
           competition_id?: string
           field?: string
+          points?: number
           team_id?: string
           user_id?: string
         }
@@ -730,21 +1239,21 @@ export type Database = {
           id: number
           team_id: string
           text: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           id?: never
           team_id: string
           text: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           id?: never
           team_id?: string
           text?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -766,29 +1275,41 @@ export type Database = {
       teams: {
         Row: {
           competition_id: string
+          created_at: string
+          demo_url: string | null
+          frozen_sha: string | null
           id: string
-          jury_score: number | null
           name: string
-          rank: number | null
+          public_run: Json | null
+          public_run_at: string | null
           repo_url: string | null
+          signals: Json
           submitted_at: string | null
         }
         Insert: {
           competition_id: string
+          created_at?: string
+          demo_url?: string | null
+          frozen_sha?: string | null
           id?: string
-          jury_score?: number | null
           name: string
-          rank?: number | null
+          public_run?: Json | null
+          public_run_at?: string | null
           repo_url?: string | null
+          signals?: Json
           submitted_at?: string | null
         }
         Update: {
           competition_id?: string
+          created_at?: string
+          demo_url?: string | null
+          frozen_sha?: string | null
           id?: string
-          jury_score?: number | null
           name?: string
-          rank?: number | null
+          public_run?: Json | null
+          public_run_at?: string | null
           repo_url?: string | null
+          signals?: Json
           submitted_at?: string | null
         }
         Relationships: [
@@ -806,7 +1327,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      apply_score_items: {
+        Args: { p_items: Json; p_user: string }
+        Returns: undefined
+      }
+      close_season: { Args: { p_season: number }; Returns: Json }
+      gemini_take: {
+        Args: { p_kind: string; p_limit: number }
+        Returns: boolean
+      }
+      project_overlap: {
+        Args: { p_exclude: string; p_shas: string[] }
+        Returns: {
+          project_id: string
+          shared: number
+          user_id: string
+        }[]
+      }
+      season_moves: {
+        Args: never
+        Returns: {
+          champion: boolean
+          from_league: string
+          rank: number
+          season_points: number
+          to_league: string
+          user_id: string
+        }[]
+      }
+      template_shas: { Args: { p_shas: string[] }; Returns: string[] }
     }
     Enums: {
       [_ in never]: never

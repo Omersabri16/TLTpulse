@@ -1,19 +1,34 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ArrowUpRight, Lock, Search, Trophy } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, ChevronsDown, ChevronsUp, Crown, Lock, Search, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { UserAvatar } from "@/components/brand";
 import { Modal } from "@/components/modal";
 import { Container, PageHero, Segmented } from "@/components/page-shell";
 import { btn, inputClass } from "@/lib/btn";
-import { levelOf, type LeagueRow } from "@/lib/score";
+import { MIN_SEASON_POINTS, PROMOTION_TOP, type LeagueRow } from "@/lib/score";
 import { useApp, useMyScore } from "@/lib/store";
-import type { Level } from "@/lib/types";
+import type { Level, SeasonInfo } from "@/lib/types";
+import { daysLeft } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
-export function League({ all }: { all: LeagueRow[] }) {
+function Line({ kind, level }: { kind: "up" | "down"; level: Level }) {
+  const up = kind === "up";
+  return (
+    <li aria-hidden className={cn("flex items-center gap-3 px-4 py-2 text-xs font-semibold sm:px-6", up ? "bg-ok-bg text-ok" : "bg-destructive/10 text-destructive")}>
+      {up ? <ChevronsUp className="size-4" /> : <ChevronsDown className="size-4" />}
+      {up
+        ? level === "Kıdemli"
+          ? `Sezon şampiyonları: ilk ${PROMOTION_TOP} (en az ${MIN_SEASON_POINTS} puan)`
+          : `Yükselme çizgisi: ilk ${PROMOTION_TOP} (en az ${MIN_SEASON_POINTS} puan) sezon sonunda üst lige çıkar`
+        : `Düşme çizgisi: son ${PROMOTION_TOP} (${MIN_SEASON_POINTS} puanın altında) bir alt lige düşer`}
+    </li>
+  );
+}
+
+export function League({ all, season }: { all: LeagueRow[]; season: SeasonInfo | null }) {
   const session = useApp((s) => s.session);
   const profile = useApp((s) => s.profile);
   const score = useMyScore();
@@ -21,26 +36,35 @@ export function League({ all }: { all: LeagueRow[] }) {
   const member = !!session && !!profile;
 
   const [levelChoice, setLevel] = useState<Level | null>(null);
-  // Seçim yapılana kadar giriş yapan kendi liginde, misafir Orta ligde başlar.
-  const level = levelChoice ?? (member ? score.level : "Orta");
+  // Seçim yapılana kadar giriş yapan kendi liginde, misafir Yeni başlayan liginde başlar.
+  const level = levelChoice ?? (member ? score.level : "Yeni başlayan");
   const [q, setQ] = useState("");
   const [gate, setGate] = useState(false);
 
-  const rows = useMemo(() => {
-    const t = q.toLocaleLowerCase("tr");
-    // Kendi satırında store'daki en güncel puan kullanılır.
+  // Sıra arama süzmesinden önce hesaplanır; çizgiler sıraya göre çizilir.
+  const { rows, upAfter, downFrom } = useMemo(() => {
     const mine = member && profile ? profile.username : "";
-    return all
-      .map((r) => (r.username === mine ? { ...r, score: score.total, me: true } : r))
-      .sort((a, b) => b.score - a.score)
-      .filter((r) => levelOf(r.score) === level)
-      .filter((r) => !t || r.name.toLocaleLowerCase("tr").includes(t));
-  }, [all, member, profile, score.total, level, q]);
+    const ranked = all
+      .filter((r) => r.league === level)
+      .map((r) => (r.username === mine ? { ...r, me: true } : r))
+      .map((r, i) => ({ ...r, rank: i + 1 }));
+    const n = ranked.length;
+    const up = ranked.filter((r, i) => i < PROMOTION_TOP && r.score >= MIN_SEASON_POINTS).length;
+    let down = -1;
+    if (level !== "Yeni başlayan") {
+      const i = ranked.findIndex((r, j) => j >= Math.max(up, n - PROMOTION_TOP) && r.score < MIN_SEASON_POINTS);
+      down = i;
+    }
+    const t = q.toLocaleLowerCase("tr");
+    return { rows: ranked.filter((r) => !t || r.name.toLocaleLowerCase("tr").includes(t)), upAfter: up, downFrom: down };
+  }, [all, member, profile, level, q]);
 
   const open = (username: string, me?: boolean) => {
     if (!member) return setGate(true);
     router.push(me ? "/profil" : `/u/${username}`);
   };
+  const left = season ? daysLeft(season.endsAt) : null;
+  const filtered = !!q;
 
   return (
     <>
@@ -48,11 +72,23 @@ export function League({ all }: { all: LeagueRow[] }) {
         eyebrow="Ürettikçe yüksel"
         title="Yeteneğin"
         highlight="liginde."
-        subtitle="Aynı hedef, farklı yollar. Yerini yaptığın iş belirler."
+        subtitle="Herkes Yeni başlayan liginde başlar. Lig puanı sadece bu sezon kazandığın puandır."
         right={
-          <span className="inline-flex items-center gap-2 text-sm text-on-navy-muted">
-            <Trophy className="size-5 text-cyan" /> 2026 · Güz sezonu
-          </span>
+          <div className="grid gap-1 text-left text-sm text-on-navy-muted sm:text-right">
+            <span className="inline-flex items-center gap-2 sm:justify-end">
+              <Trophy className="size-5 text-cyan" /> {season?.name ?? "Sezon"}
+            </span>
+            {left !== null && (
+              <span>
+                Bitmesine <b className="text-2xl text-on-navy tabular-nums">{left}</b> gün
+              </span>
+            )}
+            {member && (
+              <span>
+                Sen: {score.level} · {score.season} puan · {score.rank.rank}. sıra
+              </span>
+            )}
+          </div>
         }
       />
       <Container>
@@ -90,47 +126,53 @@ export function League({ all }: { all: LeagueRow[] }) {
         </div>
 
         <div className="overflow-hidden rounded-3xl border bg-card">
-          <div className="hidden grid-cols-[64px_1fr_120px_40px] gap-4 border-b px-6 py-4 text-xs text-muted-foreground sm:grid">
+          <div className="hidden grid-cols-[64px_1fr_140px_40px] gap-4 border-b px-6 py-4 text-xs text-muted-foreground sm:grid">
             <span>Sıra</span>
             <span>Yazılımcı</span>
-            <span>Lig puanı</span>
+            <span>Sezon puanı</span>
             <span />
           </div>
-          {rows.length === 0 && <p className="px-6 py-10 text-sm text-muted-foreground">Bu filtrede kimse yok.</p>}
+          {rows.length === 0 && <p className="px-6 py-10 text-sm text-muted-foreground">{q ? "Bu aramayla eşleşen yok." : "Bu ligde henüz kimse yok."}</p>}
           <ul>
-            {rows.map((r, i) => (
-              <li key={r.username}>
-                <button
-                  onClick={() => open(r.username, r.me)}
-                  className={cn(
-                    "grid w-full grid-cols-[40px_1fr_auto] items-center gap-4 border-b px-4 py-4 text-left text-sm transition last:border-b-0 hover:bg-muted/60 sm:grid-cols-[64px_1fr_120px_40px] sm:px-6",
-                    r.me && "bg-secondary hover:bg-secondary",
-                  )}
-                >
-                  <span className="text-lg tabular-nums">
-                    {String(i + 1).padStart(2, "0")}
-                    {i === 0 && <Trophy className="ml-1 inline size-4 text-cyan-ink" />}
-                  </span>
-                  <span className="flex min-w-0 items-center gap-3">
-                    <UserAvatar name={r.name} className="size-11" />
-                    <span className="min-w-0">
-                      <b className="font-semibold">{r.name}</b>
-                      {r.me && <span className="ml-2 text-xs text-muted-foreground">Sen</span>}
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {r.school}
+            {rows.map((r) => (
+              <Fragment key={r.username}>
+                {!filtered && downFrom >= 0 && r.rank === downFrom + 1 && <Line kind="down" level={level} />}
+                <li>
+                  <button
+                    onClick={() => open(r.username, r.me)}
+                    className={cn(
+                      "grid w-full grid-cols-[40px_1fr_auto] items-center gap-4 border-b px-4 py-4 text-left text-sm transition last:border-b-0 hover:bg-muted/60 sm:grid-cols-[64px_1fr_140px_40px] sm:px-6",
+                      r.me && "bg-secondary hover:bg-secondary",
+                    )}
+                  >
+                    <span className="text-lg tabular-nums">
+                      {String(r.rank).padStart(2, "0")}
+                      {r.rank === 1 && (level === "Kıdemli" ? <Crown className="ml-1 inline size-4 text-cyan-ink" /> : <Trophy className="ml-1 inline size-4 text-cyan-ink" />)}
+                    </span>
+                    <span className="flex min-w-0 items-center gap-3">
+                      <UserAvatar name={r.name} className="size-11" />
+                      <span className="min-w-0">
+                        <b className="font-semibold">{r.name}</b>
+                        {r.me && <span className="ml-2 text-xs text-muted-foreground">Sen</span>}
+                        <span className="block truncate text-xs text-muted-foreground">{r.school}</span>
                       </span>
                     </span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <b className="text-xl font-semibold text-cyan-ink tabular-nums">{r.score}</b>
-                    {r.trend > 0 ? <ArrowUp className="size-4 text-ok" /> : r.trend < 0 ? <ArrowDown className="size-4 text-destructive" /> : null}
-                  </span>
-                  <span className="hidden text-muted-foreground sm:block">{member ? <ArrowUpRight className="size-4" /> : <Lock className="size-4" />}</span>
-                </button>
-              </li>
+                    <span className="flex items-center gap-1.5">
+                      <b className="text-xl font-semibold text-cyan-ink tabular-nums">{r.score}</b>
+                      {r.trend > 0 ? <ArrowUp className="size-4 text-ok" /> : r.trend < 0 ? <ArrowDown className="size-4 text-destructive" /> : null}
+                    </span>
+                    <span className="hidden text-muted-foreground sm:block">{member ? <ArrowUpRight className="size-4" /> : <Lock className="size-4" />}</span>
+                  </button>
+                </li>
+                {!filtered && upAfter > 0 && r.rank === upAfter && <Line kind="up" level={level} />}
+              </Fragment>
             ))}
           </ul>
         </div>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Eşit puanda o puana önce ulaşan öne geçer. Sezon sonunda her ligin ilk {PROMOTION_TOP}&apos;si (en az {MIN_SEASON_POINTS} puanla) bir üst lige çıkar; Orta ve Kıdemli&apos;nin son{" "}
+          {PROMOTION_TOP}&apos;si ({MIN_SEASON_POINTS} puanın altındaysa) düşer.
+        </p>
       </Container>
 
       <Modal open={gate} onOpenChange={setGate} title="Profilleri görmek için giriş yap" description="Ligi herkes görebilir; profillere bakmak, mesaj atmak ve yarışmalara katılmak için hesabın olmalı.">
@@ -146,5 +188,3 @@ export function League({ all }: { all: LeagueRow[] }) {
     </>
   );
 }
-
-

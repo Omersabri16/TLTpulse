@@ -1,12 +1,27 @@
 import "server-only";
 
-import { computeScore, levelOf, stepDone, type CompetitionResult, type RoadmapContext } from "@/lib/score";
+import { MENTOR_MIN_STARS, scoreItems, stepDone, sumBySource, type RoadmapContext } from "@/lib/score";
 import { fmtClock, fmtRelative } from "@/lib/time";
-import type { ChatLine, CompetitionHistoryItem, Conversation, Field, Level, MeData, MeScore, PersonRef, Roadmap, ScoreEvent } from "@/lib/types";
+import type {
+  Badge,
+  ChatLine,
+  CompetitionHistoryItem,
+  Conversation,
+  CredentialItem,
+  Field,
+  Level,
+  MeData,
+  MeScore,
+  PersonRef,
+  Roadmap,
+  ScoreEvent,
+  ScoreSource,
+} from "@/lib/types";
 import { db } from "./admin";
 import {
   APPROVAL_COLS,
   PROFILE_COLS,
+  PROJECT_COLS,
   toCert,
   toExperience,
   toProfile,
@@ -18,8 +33,9 @@ import {
   type ProfileRow,
   type ProjectRow,
 } from "./rows";
+import { openSeason, rankFor } from "./season";
 
-export const EMPTY_SCORE: MeScore = { total: 0, level: "Yeni başlayan", parts: [], rank: { rank: 0, of: 0 }, roadmapDone: [] };
+export const EMPTY_SCORE: MeScore = { total: 0, season: 0, level: "Yeni başlayan", parts: [], allParts: [], rank: { rank: 0, of: 0 }, roadmapDone: [] };
 
 export const EMPTY_ME: MeData = {
   session: null,
@@ -38,23 +54,22 @@ export const EMPTY_ME: MeData = {
   score: EMPTY_SCORE,
   people: {},
   competitionHistory: [],
+  season: null,
+  badges: [],
+  credentials: [],
+  seasonResult: null,
+  isAdmin: false,
+  kvkkAccepted: false,
+  blocked: [],
 };
 
-const LEVEL_RANGE: Record<Level, [number, number]> = { "Yeni başlayan": [-1e9, 60], Orta: [60, 80], Kıdemli: [80, 1e9] };
+function check(res: { error: { message: string } | null }, what: string) {
+  if (res.error) throw new Error(`${what}: ${res.error.message}`);
+}
 
 function must<T>(res: { data: T | null; error: { message: string } | null }, what: string): T {
   if (res.error) throw new Error(`${what}: ${res.error.message}`);
   return res.data as T;
-}
-
-/** Sırayı saklanan puanlara göre hesaplar (eşit puan aynı sırayı alır). */
-export async function rankFor(total: number) {
-  const [lo, hi] = LEVEL_RANGE[levelOf(total)];
-  const [above, all] = await Promise.all([
-    db().from("profiles").select("id", { count: "exact", head: true }).gt("score", total).gte("score", lo).lt("score", hi),
-    db().from("profiles").select("id", { count: "exact", head: true }).gte("score", lo).lt("score", hi),
-  ]);
-  return { rank: (above.count ?? 0) + 1, of: all.count ?? 0 };
 }
 
 interface CompRow {
@@ -64,80 +79,14 @@ interface CompRow {
   status: string;
 }
 
-/** Kullanıcının takımları, yarışmaları ve puana giren tamamlanmış yarışma sonuçları. */
+type MemberRow = { team_id: string; competition_id: string; field: Field; points: number };
+
+/** Kullanıcının takımları ve yarışmaları. */
 async function teamsOf(userId: string) {
-  const mine = must(await db().from("team_members").select("team_id, competition_id, field").eq("user_id", userId), "takımlar") as {
-    team_id: string;
-    competition_id: string;
-    field: Field;
-  }[];
-  if (!mine.length) return { mine, teams: [] as { id: string; competition_id: string; rank: number | null }[], comps: [] as CompRow[] };
-  const [teams, comps] = await Promise.all([
-    db().from("teams").select("id, competition_id, rank").in("id", mine.map((m) => m.team_id)),
-    db().from("competitions").select("id, code, title, status").in("id", mine.map((m) => m.competition_id)),
-  ]);
-  return {
-    mine,
-    teams: must(teams, "takım") as { id: string; competition_id: string; rank: number | null }[],
-    comps: must(comps, "yarışma") as CompRow[],
-  };
-}
-
-function completedResults(t: Awaited<ReturnType<typeof teamsOf>>): CompetitionResult[] {
-  return t.comps
-    .filter((c) => c.status === "Tamamlandı")
-    .map((c) => ({ id: c.id, code: c.code, title: c.title, rank: t.teams.find((x) => x.competition_id === c.id)?.rank ?? null }));
-}
-
-/** Puanı kaynak tablolardan yeniden hesaplayıp profile yazar. Puanı değiştiren her işlemden sonra çağrılır. */
-export async function syncScore(userId: string) {
-  const [profile, projects, certs, approvals, peer, roadmap, apps, given, exps, t] = await Promise.all([
-    db().from("profiles").select(PROFILE_COLS).eq("id", userId).single(),
-    db().from("projects").select("id, name, repo_owner, repo_name, description, techs, role, language, demo_url, analysis, points, created_at").eq("user_id", userId),
-    db().from("certificates").select("id, name, provider, link, issued_on, status, points").eq("user_id", userId),
-    db().from("approvals").select(APPROVAL_COLS).eq("user_id", userId),
-    db().from("peer_ratings").select("competition_id, stars").eq("to_user", userId),
-    db().from("roadmaps").select("*").eq("user_id", userId).maybeSingle(),
-    db().from("applications").select("competition_id, field").eq("user_id", userId),
-    db().from("peer_ratings").select("team_id").eq("from_user", userId),
-    db().from("experiences").select("id, kind, title, org, start_label, end_label, description").eq("user_id", userId),
-    teamsOf(userId),
-  ]);
-  const p = must(profile, "profil") as ProfileRow;
-  const ctx: RoadmapContext = {
-    profile: toProfile(p, "", (must(exps, "deneyim") as ExperienceRow[]).map(toExperience), []),
-    projects: (must(projects, "proje") as ProjectRow[]).map(toProject),
-    certs: (must(certs, "sertifika") as CertRow[]).map(toCert),
-    references: (must(approvals, "onay") as ApprovalRow[]).map((r) => toReference(r)),
-    applications: Object.fromEntries((must(apps, "başvuru") as { competition_id: string; field: Field }[]).map((a) => [a.competition_id, a.field])),
-    peerGivenCount: new Set((must(given, "verilen puan") as { team_id: string }[]).map((g) => g.team_id)).size,
-  };
-  const rm = roadmapFromRow(must(roadmap, "yol haritası") as RoadmapRow | null);
-  return calc(userId, p, ctx, (must(peer, "akran") as { competition_id: string; stars: number }[]).map((x) => ({ stars: x.stars, competitionId: x.competition_id })), completedResults(t), rm);
-}
-
-async function calc(
-  userId: string,
-  p: ProfileRow,
-  ctx: RoadmapContext,
-  peerReceived: { stars: number; competitionId?: string }[],
-  completed: CompetitionResult[],
-  roadmap: Roadmap | null,
-): Promise<MeScore> {
-  const roadmapDone = roadmap ? roadmap.steps.filter((st) => stepDone(st, ctx, roadmap.baseline)).map((st) => st.id) : [];
-  const roadmapDonePoints = roadmap ? roadmap.steps.filter((s) => roadmapDone.includes(s.id)).reduce((a, s) => a + s.points, 0) : 0;
-  const s = computeScore({
-    projects: ctx.projects,
-    certs: ctx.certs,
-    references: ctx.references,
-    peerReceived,
-    completedCompetitions: completed,
-    roadmapDonePoints,
-  });
-  // seed_points sadece örnek (demo) kullanıcılar için; gerçek hesaplarda 0.
-  const total = s.total + p.seed_points;
-  if (total !== p.score) await db().from("profiles").update({ score: total }).eq("id", userId);
-  return { total, level: levelOf(total), parts: s.parts, rank: await rankFor(total), roadmapDone };
+  const mine = must(await db().from("team_members").select("team_id, competition_id, field, points").eq("user_id", userId), "takımlar") as MemberRow[];
+  if (!mine.length) return { mine, comps: [] as CompRow[] };
+  const comps = must(await db().from("competitions").select("id, code, title, status").in("id", mine.map((m) => m.competition_id)), "yarışma") as CompRow[];
+  return { mine, comps };
 }
 
 interface RoadmapRow {
@@ -151,26 +100,124 @@ interface RoadmapRow {
 export const roadmapFromRow = (r: RoadmapRow | null): Roadmap | null =>
   r ? { target: r.target, summary: r.summary, steps: r.steps, baseline: r.baseline, generatedAt: r.generated_at } : null;
 
+/**
+ * Puanı kaynak tablolardan yeniden hesaplar ve defteri (score_events) günceller: her kalemin beklenen puanı ile defterdeki
+ * toplamı arasındaki fark yeni satır olarak açık sezona yazılır. Sezon puanı ve tüm zamanların toplamı defterden.
+ * Puanı değiştiren her işlemden sonra çağrılır; tekrar çağrılması zararsızdır (fark yoksa yazmaz).
+ */
+export async function syncScore(userId: string): Promise<MeScore> {
+  const [profile, projects, certs, approvals, peer, roadmap, apps, given, exps, t, season] = await Promise.all([
+    db().from("profiles").select(PROFILE_COLS).eq("id", userId).single(),
+    db().from("projects").select(PROJECT_COLS).eq("user_id", userId),
+    db().from("certificates").select("id, name, provider, link, issued_on, status, points").eq("user_id", userId),
+    db().from("approvals").select(APPROVAL_COLS).eq("user_id", userId),
+    db().from("peer_ratings").select("competition_id, stars, from_user").eq("to_user", userId),
+    db().from("roadmaps").select("*").eq("user_id", userId).maybeSingle(),
+    db().from("applications").select("competition_id, field").eq("user_id", userId),
+    db().from("peer_ratings").select("team_id").eq("from_user", userId),
+    db().from("experiences").select("id, kind, title, org, start_label, end_label, description").eq("user_id", userId),
+    teamsOf(userId),
+    openSeason(),
+  ]);
+  const p = must(profile, "profil") as ProfileRow;
+  const projectList = (must(projects, "proje") as ProjectRow[]).map(toProject);
+  const certRows = must(certs, "sertifika") as CertRow[];
+  const approvalRows = must(approvals, "onay") as ApprovalRow[];
+  const ctx: RoadmapContext = {
+    profile: toProfile(p, "", (must(exps, "deneyim") as ExperienceRow[]).map(toExperience), []),
+    projects: projectList.filter((x) => x.status === "hazır"),
+    certs: certRows.map(toCert),
+    references: approvalRows.map((r) => toReference(r)),
+    applications: Object.fromEntries((must(apps, "başvuru") as { competition_id: string; field: Field }[]).map((a) => [a.competition_id, a.field])),
+    peerGivenCount: new Set((must(given, "verilen puan") as { team_id: string }[]).map((g) => g.team_id)).size,
+  };
+  const rm = roadmapFromRow(must(roadmap, "yol haritası") as RoadmapRow | null);
+  const roadmapDone = rm ? rm.steps.filter((st) => stepDone(st, ctx, rm.baseline)).map((st) => st.id) : [];
+
+  // Yarışmalar: sadece tamamlananların kişisel puanı. Akran ve mentor puanı da tamamlananlardan.
+  const completed = t.comps.filter((c) => c.status === "Tamamlandı");
+  const compById = new Map(t.comps.map((c) => [c.id, c]));
+  const peerRows = must(peer, "akran") as { competition_id: string; stars: number; from_user: string }[];
+  const byComp = new Map<string, { stars: number; from: string }[]>();
+  for (const r of peerRows) byComp.set(r.competition_id, [...(byComp.get(r.competition_id) ?? []), { stars: r.stars, from: r.from_user }]);
+
+  // Mentor puanı: Orta / Kıdemli üye, takımındaki Yeni başlayanlardan ortalama 4+ yıldız aldıysa.
+  const mentor: { competitionId: string; code: string }[] = [];
+  if (p.league !== "Yeni başlayan" && byComp.size) {
+    const raters = [...new Set(peerRows.map((r) => r.from_user))];
+    const leagues = new Map(
+      ((await db().from("profiles").select("id, league").in("id", raters)).data as { id: string; league: Level }[] | null ?? []).map((r) => [r.id, r.league]),
+    );
+    for (const [cid, list] of byComp) {
+      const fromNew = list.filter((x) => leagues.get(x.from) === "Yeni başlayan");
+      if (compById.get(cid)?.status === "Tamamlandı" && fromNew.length && fromNew.reduce((a, x) => a + x.stars, 0) / fromNew.length >= MENTOR_MIN_STARS)
+        mentor.push({ competitionId: cid, code: compById.get(cid)!.code });
+    }
+  }
+
+  const items = scoreItems({
+    projects: projectList.map((x) => ({ id: x.id, name: x.name, points: x.analysis.points, status: x.status })),
+    certs: certRows.map((c) => ({ id: c.id, name: c.name, provider: c.provider, points: c.points })),
+    approvals: approvalRows.map((a) => ({ id: a.id, label: a.target_label, approverName: a.approver_name, status: a.status, points: a.points })),
+    competitions: completed.map((c) => ({ id: c.id, code: c.code, title: c.title, points: t.mine.find((m) => m.competition_id === c.id)?.points ?? 0 })),
+    peer: [...byComp].filter(([cid]) => compById.get(cid)?.status === "Tamamlandı").map(([cid, list]) => ({ competitionId: cid, code: compById.get(cid)!.code, stars: list.map((x) => x.stars) })),
+    mentor,
+    roadmap: rm ? rm.steps.filter((s) => roadmapDone.includes(s.id)).map((s) => ({ ref: `roadmap:${rm.generatedAt}:${s.id}`, label: `Yol haritası: ${s.title}`, points: s.points })) : [],
+  });
+
+  check(await db().rpc("apply_score_items", { p_user: userId, p_items: items }), "puan defteri");
+  if (mentor.length)
+    await db()
+      .from("badges")
+      .upsert(
+        mentor.map((m) => ({ user_id: userId, kind: "Mentor", ref: `comp-${m.competitionId}`, label: `${m.code} mentoru` })),
+        { onConflict: "user_id,kind,ref", ignoreDuplicates: true },
+      );
+
+  const [ledgerRes, after] = await Promise.all([
+    db().from("score_events").select("points, source, season_id").eq("user_id", userId),
+    db().from("profiles").select("score, season_points, season_points_at").eq("id", userId).single(),
+  ]);
+  const ledger = must(ledgerRes, "puan defteri") as { points: number; source: ScoreSource; season_id: number }[];
+  const a = must(after, "profil") as { score: number; season_points: number; season_points_at: string | null };
+  const seasonEvents = season ? ledger.filter((e) => e.season_id === season.id) : [];
+  return {
+    total: a.score,
+    season: a.season_points,
+    level: p.league,
+    parts: sumBySource(seasonEvents),
+    allParts: sumBySource(ledger),
+    rank: await rankFor(p.league, a.season_points, a.season_points_at),
+    roadmapDone,
+  };
+}
+
 /** Oturum sahibinin bütün verisi. Her değişiklikten sonra yeniden yüklenip istemciye döner. */
 export async function loadMe(userId: string, email: string): Promise<MeData> {
   const profRes = await db().from("profiles").select(PROFILE_COLS).eq("id", userId).maybeSingle();
   const p = must(profRes, "profil") as ProfileRow | null;
   if (!p) return EMPTY_ME;
 
-  const [exps, conns, projects, certs, approvals, peerIn, peerOut, events, apps, roadmap, t, convs, notes] = await Promise.all([
+  const [exps, conns, projects, certs, approvals, peerIn, peerOut, events, apps, roadmap, t, convs, notes, score, season, badges, creds, result, blocks] = await Promise.all([
     db().from("experiences").select("id, kind, title, org, start_label, end_label, description").eq("user_id", userId).order("created_at", { ascending: false }),
     db().from("connections").select("other_id").eq("user_id", userId),
-    db().from("projects").select("id, name, repo_owner, repo_name, description, techs, role, language, demo_url, analysis, points, created_at").eq("user_id", userId).order("created_at", { ascending: false }),
+    db().from("projects").select(PROJECT_COLS).eq("user_id", userId).order("created_at", { ascending: false }),
     db().from("certificates").select("id, name, provider, link, issued_on, status, points").eq("user_id", userId).order("issued_on", { ascending: false }),
     db().from("approvals").select(APPROVAL_COLS).eq("user_id", userId).order("requested_at", { ascending: false }),
     db().from("peer_ratings").select("from_user, competition_id, stars, note").eq("to_user", userId),
     db().from("peer_ratings").select("team_id, to_user, stars").eq("from_user", userId),
-    db().from("score_events").select("id, source, label, points, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(50),
+    db().from("score_events").select("id, source, label, points, season_id, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(60),
     db().from("applications").select("competition_id, field").eq("user_id", userId),
     db().from("roadmaps").select("*").eq("user_id", userId).maybeSingle(),
     teamsOf(userId),
     db().from("conversations").select("id, user_a, user_b").or(`user_a.eq.${userId},user_b.eq.${userId}`),
     db().from("notifications").select("id, text, href, read, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
+    syncScore(userId),
+    openSeason(),
+    db().from("badges").select("kind, label, created_at").eq("user_id", userId).order("created_at", { ascending: false }),
+    db().from("credentials").select("id, kind, title, status, url").eq("user_id", userId).order("created_at", { ascending: false }),
+    db().from("season_results").select("season_id, from_league, to_league, champion").eq("user_id", userId).eq("seen", false).order("season_id", { ascending: false }).limit(1).maybeSingle(),
+    db().from("blocks").select("blocked_id").eq("user_id", userId),
   ]);
 
   const conversations = must(convs, "sohbet") as { id: string; user_a: string; user_b: string }[];
@@ -186,19 +233,21 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
   ]);
 
   type Msg = { id: number; conversation_id: string; sender_id: string; text: string; created_at: string };
-  type TMsg = { id: number; team_id: string; user_id: string; text: string; created_at: string };
+  type TMsg = { id: number; team_id: string; user_id: string | null; text: string; created_at: string };
   const connIds = (must(conns, "bağlantı") as { other_id: string }[]).map((c) => c.other_id);
   const pin = must(peerIn, "akran") as { from_user: string; competition_id: string; stars: number; note: string | null }[];
   const pout = must(peerOut, "akran") as { team_id: string; to_user: string; stars: number }[];
   const messages = must(msgs, "mesaj") as Msg[];
   const tmessages = must(teamMsgs, "takım mesajı") as TMsg[];
+  const blockedIds = (must(blocks, "engel") as { blocked_id: string }[]).map((b) => b.blocked_id);
 
   // Adı geçen herkesin kullanıcı adı ve alanı tek sorguda.
   const ids = new Set<string>([
     ...connIds,
+    ...blockedIds,
     ...pout.map((x) => x.to_user),
     ...conversations.flatMap((c) => [c.user_a, c.user_b]),
-    ...tmessages.map((m) => m.user_id),
+    ...tmessages.flatMap((m) => (m.user_id ? [m.user_id] : [])),
     ...(must(teamMembers, "üye") as { user_id: string }[]).map((m) => m.user_id),
   ]);
   ids.delete(userId);
@@ -206,8 +255,9 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
     ? (must(await db().from("profiles").select("id, username, name, field").in("id", [...ids]), "kişiler") as { id: string; username: string; name: string; field: string }[])
     : [];
   const byId = new Map(peopleRows.map((r) => [r.id, r]));
-  const uname = (id: string) => (id === userId ? p.username : (byId.get(id)?.username ?? "silinmis"));
+  const uname = (id: string | null) => (id === userId ? p.username : ((id && byId.get(id)?.username) ?? "silinmis"));
   const people: Record<string, PersonRef> = Object.fromEntries(peopleRows.map((r) => [r.username, { username: r.username, name: r.name, field: r.field }]));
+  people.silinmis = { username: "silinmis", name: "Silinmiş kullanıcı", field: "" };
 
   const experiences = (must(exps, "deneyim") as ExperienceRow[]).map(toExperience);
   const profile = toProfile(p, email, experiences, connIds.map(uname));
@@ -235,21 +285,16 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
   convList.sort((a, b) => b.last.localeCompare(a.last));
 
   const competitionHistory: CompetitionHistoryItem[] = t.comps.map((c) => {
-    const team = t.teams.find((x) => x.competition_id === c.id);
-    const field = t.mine.find((m) => m.competition_id === c.id)?.field ?? "";
-    const detail = c.status === "Tamamlandı" ? (team?.rank && team.rank <= 3 ? `${team.rank}. · ${field}` : `Katıldı · ${field}`) : `Devam ediyor · ${field}`;
-    return { id: c.id, label: `${c.code} ${c.title}`, detail };
+    const m = t.mine.find((x) => x.competition_id === c.id);
+    return { id: c.id, label: `${c.code} ${c.title}`, detail: historyDetail(c.status, m?.field ?? "", m?.points ?? 0) };
   });
 
-  const ctx: RoadmapContext = { profile, projects: projectList, certs: certList, references, applications, peerGivenCount: Object.keys(peerGiven).length };
-  const score = await calc(
-    userId,
-    p,
-    ctx,
-    pin.map((x) => ({ stars: x.stars, competitionId: x.competition_id })),
-    completedResults(t),
-    rm,
-  );
+  const sr = must(result, "sezon sonucu") as { season_id: number; from_league: Level; to_league: Level; champion: boolean } | null;
+  let seasonResult: MeData["seasonResult"] = null;
+  if (sr) {
+    const s = await db().from("seasons").select("name").eq("id", sr.season_id).maybeSingle();
+    seasonResult = { seasonName: (s.data as { name: string } | null)?.name ?? "Sezon", from: sr.from_league, to: sr.to_league, champion: sr.champion };
+  }
 
   return {
     session: { username: p.username },
@@ -260,12 +305,13 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
     // Akran puanı anonim: kimin verdiği istemciye gönderilmez.
     peerReceived: pin.map((x) => ({ from: "", competitionId: x.competition_id, stars: x.stars, note: x.note ?? undefined })),
     peerGiven,
-    history: (must(events, "puan geçmişi") as { id: string; source: ScoreEvent["source"]; label: string; points: number; created_at: string }[]).map((e) => ({
+    history: (must(events, "puan geçmişi") as { id: string; source: ScoreEvent["source"]; label: string; points: number; season_id: number; created_at: string }[]).map((e) => ({
       id: e.id,
       at: e.created_at,
       source: e.source,
       label: e.label,
       points: e.points,
+      seasonId: e.season_id,
     })),
     applications,
     roadmap: rm,
@@ -281,5 +327,25 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
     score,
     people,
     competitionHistory,
+    season,
+    badges: (must(badges, "rozet") as { kind: Badge["kind"]; label: string; created_at: string }[]).map((b) => ({ kind: b.kind, label: b.label, at: b.created_at })),
+    credentials: (must(creds, "sertifika") as { id: string; kind: CredentialItem["kind"]; title: string; status: CredentialItem["status"]; url: string | null }[]).map((c) => ({
+      id: c.id,
+      kind: c.kind,
+      title: c.title,
+      status: c.status,
+      url: c.url ?? undefined,
+    })),
+    seasonResult,
+    isAdmin: p.is_admin,
+    kvkkAccepted: !!p.kvkk_accepted_at,
+    blocked: blockedIds.map(uname),
   };
+}
+
+export function historyDetail(status: string, field: string, points: number) {
+  if (status === "Tamamlandı") return points ? `${field} · +${points} puan` : `${field} · puan yok`;
+  if (status === "Değerlendiriliyor") return `${field} · değerlendiriliyor`;
+  if (status === "İptal") return `${field} · iptal edildi`;
+  return `Devam ediyor · ${field}`;
 }

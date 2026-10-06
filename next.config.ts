@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Dev modunda aksiyon argümanları (şifreler dahil) terminale yazılmasın.
   logging: { serverFunctions: false },
+  // CV yükleme (en fazla 4 MB; Vercel'in istek sınırı 4.5 MB). Dosya saklanmaz, sadece metni çıkarılır.
+  experimental: { serverActions: { bodySizeLimit: "4.5mb" } },
+  serverExternalPackages: ["unpdf"],
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

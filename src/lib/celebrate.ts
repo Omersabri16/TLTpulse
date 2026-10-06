@@ -1,18 +1,36 @@
 "use client";
 
 import { toast } from "sonner";
-import { levelOf } from "./score";
+import { MIN_SEASON_POINTS, PROMOTION_TOP } from "./score";
+import type { MeData, MeScore } from "./types";
 
-/** Lig atlanınca "patlama" (TLT) anı. */
-export function celebrateIfLevelUp(before: number, after: number) {
-  const a = levelOf(before);
-  const b = levelOf(after);
-  if (a === b || after < before) return false;
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    import("canvas-confetti").then(({ default: confetti }) =>
-      confetti({ particleCount: 140, spread: 80, origin: { y: 0.7 }, colors: ["#1aa7ec", "#5249d0", "#e4e1fb", "#3ddc97"] }),
-    );
-  }
-  toast.success(`${b === "Kıdemli" ? "Kıdemli" : "Orta"} lige yükseldin!`, { description: `Puanın ${before} → ${after}` });
+function burst(big = true) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  import("canvas-confetti").then(({ default: confetti }) =>
+    confetti({ particleCount: big ? 160 : 80, spread: big ? 90 : 60, origin: { y: 0.7 }, colors: ["#1aa7ec", "#5249d0", "#e4e1fb", "#3ddc97"] }),
+  );
+}
+
+const aboveLine = (s: MeScore) => s.level !== "Kıdemli" && s.season >= MIN_SEASON_POINTS && s.rank.rank > 0 && s.rank.rank <= PROMOTION_TOP;
+
+/** Puan artınca yükselme çizgisinin üstüne çıktıysa küçük bir "patlama". Çıkmadıysa false. */
+export function celebrateIfAboveLine(before: MeScore, after: MeScore) {
+  if (aboveLine(before) || !aboveLine(after)) return false;
+  burst(false);
+  toast.success("Yükselme çizgisinin üstündesin!", { description: `Sezon sonunda böyle kalırsan ${after.level === "Yeni başlayan" ? "Orta" : "Kıdemli"} lige çıkarsın.` });
   return true;
+}
+
+/** Sezon kapandıktan sonraki ilk girişte: lige yükseldiyse ya da şampiyon olduysa konfeti (TLT = patlama anı). */
+export function celebrateSeason(r: NonNullable<MeData["seasonResult"]>) {
+  const up = (r.from === "Yeni başlayan" && r.to !== "Yeni başlayan") || (r.from === "Orta" && r.to === "Kıdemli");
+  if (r.champion) {
+    burst();
+    toast.success(`${r.seasonName} şampiyonusun!`, { description: "Kıdemli ligin ilk 20'sindesin. Rozetin profilinde." });
+  } else if (up) {
+    burst();
+    toast.success(`${r.to} lige yükseldin!`, { description: `${r.seasonName} bitti; yeni sezonda ${r.to} ligindesin.` });
+  } else if (r.to !== r.from) {
+    toast(`${r.seasonName} bitti: ${r.to} ligindesin.`, { description: "Yeni sezonda puanın sıfırdan başladı; tekrar yükselebilirsin." });
+  }
 }

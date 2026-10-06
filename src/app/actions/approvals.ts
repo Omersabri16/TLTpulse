@@ -8,7 +8,7 @@ import { APPROVAL_DAYS, newToken, TOKEN_RE, tokenHash } from "@/lib/server/appro
 import { requireUser } from "@/lib/server/auth";
 import { sendApprovalEmail } from "@/lib/server/mail";
 import { loadMe, syncScore } from "@/lib/server/me";
-import { notify, scoreEvent } from "@/lib/server/notify";
+import { notify } from "@/lib/server/notify";
 import { allow } from "@/lib/server/rate";
 
 const site = () => process.env.SITE_URL ?? "http://localhost:3000";
@@ -148,10 +148,7 @@ export async function answerApproval(input: z.input<typeof AnswerInput>) {
       v.approve ? `${a.approver_name} onay verdi${comment ? " ve yorum yazdı" : ""}: ${a.target_label}` : `${a.approver_name} onay isteğini reddetti: ${a.target_label}`,
       "/profil",
     );
-    if (v.approve) {
-      await scoreEvent(a.user_id, "Referanslar", `${a.approver_name} onayladı: ${a.target_label}`, points);
-      await syncScore(a.user_id);
-    }
+    if (v.approve) await syncScore(a.user_id);
     return { approved: v.approve };
   });
 }

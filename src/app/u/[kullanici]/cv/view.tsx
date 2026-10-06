@@ -43,7 +43,7 @@ export function Cv({ data }: { data: ProfileData & { cvCode: string } }) {
               {[data.school, data.city, data.github && `github.com/${data.github}`].filter(Boolean).join(" · ")}
             </p>
             <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#e4e1fb] px-3 py-1 text-xs font-semibold text-[#3b33b0]">
-              {levelLabel(data.level)} · {data.score} puan
+              {levelLabel(data.level)} · {data.score} sezon puanı · {data.total} toplam
             </p>
           </div>
           <div className="flex items-center gap-4 sm:flex-col sm:items-end sm:gap-2">

@@ -1,24 +1,81 @@
 "use client";
 
-import { Check as CheckIcon, GitBranch, Loader2, TriangleAlert } from "lucide-react";
+import { Check as CheckIcon, CircleCheck, CircleDashed, Clock, FileCode2, GitBranch, Loader2, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { addProject, previewProject } from "@/app/actions/projects";
+import { addProject, previewProject, type PreviewResult } from "@/app/actions/projects";
 import { GithubVerify } from "@/components/github-verify";
-import { Choice, Field, Modal } from "@/components/modal";
+import { Field, Modal } from "@/components/modal";
 import { Pill } from "@/components/page-shell";
-import { TagInput } from "@/components/tag-input";
 import { btn, inputClass } from "@/lib/btn";
-import { celebrateIfLevelUp } from "@/lib/celebrate";
-import { parseRepoUrl } from "@/lib/score";
+import { celebrateIfAboveLine } from "@/lib/celebrate";
+import { DIFFICULTY_POINTS, MIN_COMMIT_DAYS, parseRepoUrl, QUALITY_RULES } from "@/lib/score";
 import { isHttpUrl } from "@/lib/safe";
 import { useAct, useApp, useMyScore } from "@/lib/store";
 import type { ProjectAnalysis } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const STAGES = ["Repo bulundu", "Commit yazarlığı kontrol ediliyor", "Dosya yapısı okunuyor: test, CI, README", "Zorluk ve kalite hesaplanıyor"];
-type Result = { ok: true; analysis: ProjectAnalysis } | { ok: false; reason: string };
+const STAGES = ["Repo ve commit yazarlığı", "Dosya özetleri: kopya ve şablon kontrolü", "AI kodu okuyup zorluğu sınıflandırıyor", "CI, demo, README ve commit günleri"];
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const REJECT_TITLE: Record<string, string> = { kopya: "Kopya kod", şablon: "Çoğu şablon dosyası", fork: "Fork", yazarlık: "Commit yazarlığı yetersiz", erişim: "Repoya ulaşılamadı" };
+
+/** Analiz sonucunun ortak gösterimi (ekleme penceresi ve proje detayı). */
+export function AnalysisView({ analysis, repo, sha }: { analysis: ProjectAnalysis; repo: string; sha?: string }) {
+  const a = analysis;
+  const fileUrl = (f: string) => `https://github.com/${repo}/blob/${sha ?? "HEAD"}/${f.split("/").map(encodeURIComponent).join("/")}`;
+  const checks = [
+    ["Testler CI'da yeşil", a.checks.tests, QUALITY_RULES.ci],
+    ["Demo linki açılıyor", a.checks.demo, QUALITY_RULES.demo],
+    ["Anlamlı README", a.checks.readme, QUALITY_RULES.readme],
+    [`${MIN_COMMIT_DAYS}+ farklı günde commit (${a.commitDays} gün)`, a.checks.days, QUALITY_RULES.days],
+  ] as const;
+  return (
+    <div className="grid gap-5">
+      {a.reasons.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold">AI neden {a.difficulty.toLowerCase()} dedi?</h3>
+          <ul className="grid gap-2">
+            {a.reasons.map((r) => (
+              <li key={r.file + r.feature} className="flex items-start gap-2 text-sm">
+                <FileCode2 className="mt-0.5 size-4 shrink-0 text-primary" />
+                <span>
+                  {r.feature}:{" "}
+                  <a href={fileUrl(r.file)} target="_blank" rel="noreferrer" className="font-mono text-xs text-primary hover:underline">
+                    {r.file}
+                  </a>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold">Kalite {a.difficulty === "Kolay" ? "(Kolay projede puana eklenmez)" : `(+${a.qualityPoints} / 30)`}</h3>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {checks.map(([k, v, pts]) => (
+            <li key={k} className={cn("flex items-center gap-2 text-sm", !v && "text-muted-foreground")}>
+              {v ? <CircleCheck className="size-4 text-ok" /> : <CircleDashed className="size-4" />} {k} <span className="text-xs text-muted-foreground">+{pts}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="grid grid-cols-3 gap-3 text-sm">
+        {[
+          ["Yazarlık", `%${a.authorship}`],
+          ["Kendi dosyası", a.ownFiles],
+          ["Commit", a.commits],
+        ].map(([k, v]) => (
+          <div key={String(k)} className="rounded-2xl bg-muted p-3">
+            <span className="block text-xs text-muted-foreground">{k}</span>
+            <b className="text-base">{v}</b>
+          </div>
+        ))}
+      </div>
+      <p className="text-sm leading-relaxed text-muted-foreground">{a.summary}</p>
+    </div>
+  );
+}
 
 /** Pencere her açılışta temiz durumla başlasın diye içerik sadece açıkken bağlanır. */
 export function AddProjectDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -36,17 +93,15 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [techs, setTechs] = useState<string[]>([]);
-  const [role, setRole] = useState<"Tek başıma" | "Takımla">("Tek başıma");
   const [demoUrl, setDemoUrl] = useState("");
   const [err, setErr] = useState("");
   const [stage, setStage] = useState(0);
-  const [result, setResult] = useState<Result | null>(null);
+  const [result, setResult] = useState<PreviewResult | null>(null);
 
   // Analiz sürerken adımlar sırayla ilerler; sonuç gelince kalan adımlar tamamlanır.
   useEffect(() => {
     if (phase !== "analyzing") return;
-    const timers = STAGES.slice(0, -1).map((_, i) => setTimeout(() => setStage((s) => Math.max(s, i + 1)), 700 * (i + 1)));
+    const timers = STAGES.slice(0, -1).map((_, i) => setTimeout(() => setStage((s) => Math.max(s, i + 1)), 1500 * (i + 1)));
     return () => timers.forEach(clearTimeout);
   }, [phase]);
 
@@ -56,7 +111,7 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
     if (p && !name) setName(p.repo);
   };
 
-  const input = () => ({ repoUrl: url, name, description, techs, role, demoUrl: demoUrl.trim() });
+  const input = () => ({ repoUrl: url, name, description, demoUrl: demoUrl.trim() });
 
   const submit = async () => {
     const parsed = parseRepoUrl(url);
@@ -65,30 +120,29 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
       return setErr("Bu proje zaten ekli.");
     if (!name.trim()) return setErr("Proje adını yaz.");
     if (description.trim().length < 15) return setErr("Projeyi bir cümleyle anlat (en az 15 karakter).");
-    if (!techs.length) return setErr("En az bir teknoloji ekle.");
     if (demoUrl.trim() && !isHttpUrl(demoUrl)) return setErr("Demo linki https:// ile başlamalı.");
     setErr("");
     setStage(0);
     setPhase("analyzing");
-    const [res] = await Promise.all([act(previewProject(input()), { silent: true }).then((r) => r), wait(1400)]);
+    const [res] = await Promise.all([act(previewProject(input()), { silent: true }), wait(1500)]);
     setStage(STAGES.length);
     await wait(300);
     if (res === null) {
       setPhase("form");
       return setErr("Analiz yapılamadı. Linki kontrol edip tekrar dene.");
     }
-    setResult(res.ok ? { ok: true, analysis: res.analysis } : { ok: false, reason: res.reason });
+    setResult(res);
     setPhase("result");
   };
 
   const confirm = async () => {
     if (!result?.ok) return;
     setBusy(true);
-    const before = score.total;
     const res = await act(addProject(input()));
     setBusy(false);
     if (!res) return;
-    if (!celebrateIfLevelUp(before, res.me.score.total)) toast.success(`${name} eklendi`, { description: `+${res.points} puan` });
+    if (res.pending) toast(`${name} eklendi`, { description: "Zorluk analizi bitince puanı yazılacak; bildirim gelecek." });
+    else if (!celebrateIfAboveLine(score, res.me.score)) toast.success(`${name} eklendi`, { description: `+${res.points} puan bu sezona` });
     onOpenChange(false);
   };
 
@@ -108,7 +162,7 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
       open
       onOpenChange={onOpenChange}
       title={phase === "result" ? "Analiz sonucu" : "Proje ekle"}
-      description={phase === "form" ? "GitHub linkini yapıştır ve projeni kısaca anlat. Zorluk ve kalite otomatik hesaplanır." : undefined}
+      description={phase === "form" ? "GitHub linkini yapıştır, projeni bir cümleyle anlat. Teknolojiler, testler ve zorluk repodan okunur." : undefined}
       className="sm:max-w-xl"
     >
       {phase === "form" && (
@@ -129,20 +183,13 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
             <Field label="Proje adı">
               <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="pulse-api" />
             </Field>
-            <Field label="Canlı demo (isteğe bağlı)">
+            <Field label="Canlı demo (isteğe bağlı)" hint="Açılıyorsa kaliteye +8.">
               <input className={inputClass} value={demoUrl} onChange={(e) => setDemoUrl(e.target.value)} placeholder="https://…" />
             </Field>
           </div>
           <Field label="Ne yapıyor?">
             <textarea className={cn(inputClass, "h-auto min-h-20 py-3")} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Gerçek zamanlı bildirim ve kullanıcı yönetimi API'si." />
           </Field>
-          <Field label="Teknolojiler">
-            <TagInput value={techs} onChange={setTechs} placeholder="React, Node.js…" suggestions={["TypeScript", "React", "Node.js", "PostgreSQL", "Docker", "Python", "Go", "Flutter"]} />
-          </Field>
-          <Field label="Nasıl yaptın?">
-            <Choice value={role} onChange={setRole} options={["Tek başıma", "Takımla"]} />
-          </Field>
-          <p className="text-xs text-muted-foreground">README, testler, CI ve commit geçmişi GitHub&apos;dan otomatik okunur.</p>
           {err && <p className="text-sm text-destructive">{err}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => onOpenChange(false)} className={btn("ghost")}>
@@ -168,7 +215,10 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
         <div className="grid gap-4">
           <div className="flex gap-3 rounded-2xl bg-destructive/10 p-4 text-sm text-destructive">
             <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-            <p>{result.reason}</p>
+            <p>
+              <b className="block">{REJECT_TITLE[result.kind] ?? "Eklenemez"}</b>
+              {result.reason}
+            </p>
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setPhase("form")} className={btn("primary")}>
@@ -183,36 +233,37 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
           <div className="flex items-center justify-between gap-4 rounded-2xl bg-navy p-5 text-on-navy">
             <div>
               <p className="text-xs text-on-navy-muted">{name}</p>
-              <p className="mt-1 text-4xl font-semibold text-cyan">+{result.analysis.points}</p>
-              <p className="text-xs text-on-navy-muted">puan</p>
+              {result.pending ? (
+                <p className="mt-1 flex items-center gap-2 text-lg font-semibold text-cyan">
+                  <Clock className="size-5" /> Analiz bekliyor
+                </p>
+              ) : (
+                <>
+                  <p className="mt-1 text-4xl font-semibold text-cyan">+{result.analysis.points}</p>
+                  <p className="text-xs text-on-navy-muted">puan / 100</p>
+                </>
+              )}
             </div>
-            <div className="grid gap-2 text-right text-sm">
-              <span>
-                Zorluk: <b>{result.analysis.difficulty}</b>
-              </span>
-              <span>
-                Kalite: <b>{result.analysis.quality}</b>
-              </span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-            {[
-              ["Yazarlık", `%${result.analysis.authorship}`],
-              ["Commit", result.analysis.commits],
-              ["Test", result.analysis.checks.tests ? "Var" : "Yok"],
-              ["CI", result.analysis.checks.ci ? "Var" : "Yok"],
-            ].map(([k, v]) => (
-              <div key={String(k)} className="rounded-2xl bg-muted p-3">
-                <span className="block text-xs text-muted-foreground">{k}</span>
-                <b className="text-base">{v}</b>
+            {!result.pending && (
+              <div className="grid gap-1 text-right text-sm">
+                <span>
+                  Zorluk: <b>{result.analysis.difficulty}</b> <span className="text-on-navy-muted">+{DIFFICULTY_POINTS[result.analysis.difficulty]}</span>
+                </span>
+                <span>
+                  Kalite: <b>{result.analysis.quality}</b>
+                </span>
               </div>
-            ))}
+            )}
           </div>
-          <p className="text-sm leading-relaxed text-muted-foreground">{result.analysis.summary}</p>
+          {result.pending && (
+            <p className="text-sm text-muted-foreground">AI zorluk sınıflandırması şu an yapılamadı. Projeyi ekleyebilirsin; analiz bitince puanı yazılır ve bildirim gelir.</p>
+          )}
+          <AnalysisView analysis={result.analysis} repo={result.repo} sha={result.analysis.commitSha} />
           <div className="flex flex-wrap gap-1.5">
-            {techs.map((t) => (
+            {result.techs.map((t) => (
               <Pill key={t}>{t}</Pill>
             ))}
+            <Pill tone="muted">{result.role}</Pill>
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setPhase("form")} className={btn("ghost")}>

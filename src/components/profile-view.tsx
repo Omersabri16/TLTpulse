@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Check, Clock, ExternalLink, GitBranch, GraduationCap, MapPin, MessageSquare, Plus, Quote, Trophy, UserPlus, X } from "lucide-react";
+import { Award, BadgeCheck, Check, Clock, Copy, Crown, ExternalLink, Flag, GitBranch, GraduationCap, HeartHandshake, MapPin, MessageSquare, MoreHorizontal, Plus, Quote, ShieldOff, Trophy, UserPlus, X } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PulseLine, UserAvatar } from "@/components/brand";
@@ -8,7 +8,10 @@ import { Card, Pill } from "@/components/page-shell";
 import { btn } from "@/lib/btn";
 import { safeHref } from "@/lib/safe";
 import { levelLabel } from "@/lib/score";
-import type { Certificate, Difficulty, Education, Experience, Level, Quality, Reference, Skill } from "@/lib/types";
+import { toast } from "sonner";
+import { useIsClient } from "@/lib/store";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import type { Badge, Certificate, CredentialItem, Difficulty, Education, Experience, Level, Quality, Reference, Skill } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export interface ProfileData {
@@ -30,9 +33,14 @@ export interface ProfileData {
   skills: Skill[];
   interests: string[];
   connections: { username: string; name: string; field: string }[];
+  /** Sezon puanı (lig puanı) */
   score: number;
+  /** Tüm zamanların toplamı */
+  total: number;
   level: Level;
   rank: { rank: number; of: number };
+  badges: Badge[];
+  credentials: CredentialItem[];
 }
 
 const DIFF_TONE: Record<Difficulty, "ok" | "lav" | "muted"> = { Zor: "ok", Orta: "lav", Kolay: "muted" };
@@ -57,6 +65,7 @@ export function ProfileView({
   onAddCert,
   onRequestRef,
   onAddProject,
+  onReportProject,
 }: {
   data: ProfileData;
   own: boolean;
@@ -65,6 +74,7 @@ export function ProfileView({
   onAddCert?: () => void;
   onRequestRef?: (preset?: string) => void;
   onAddProject?: () => void;
+  onReportProject?: (id: string, name: string) => void;
 }) {
   const approved = data.references.filter((r) => r.status === "Onaylandı");
   const refFor = (type: "experience" | "project", id: string) => data.references.find((r) => r.targetType === type && r.targetId === id);
@@ -156,6 +166,11 @@ export function ProfileView({
                         <div className="flex shrink-0 items-center gap-2">
                           <Pill tone={DIFF_TONE[p.difficulty]}>{p.difficulty}</Pill>
                           {p.quality && <Pill>{p.quality}</Pill>}
+                          {!own && onReportProject && (
+                            <button onClick={() => onReportProject(p.id, p.name)} className="grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted" aria-label={`${p.name} projesini şikayet et`} title="Şikayet et">
+                              <Flag className="size-3.5" />
+                            </button>
+                          )}
                         </div>
                       </li>
                     );
@@ -302,6 +317,29 @@ export function ProfileView({
               </Section>
             )}
 
+            {data.credentials.length > 0 && (
+              <Section title="TLTpulse sertifikaları">
+                <ul className="divide-y">
+                  {data.credentials.map((c) => (
+                    <li key={c.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                      <span className="flex items-center gap-2 font-semibold">
+                        <Award className="size-4 text-primary" /> {c.title}
+                      </span>
+                      {c.status === "Gönderildi" && safeHref(c.url) ? (
+                        <a href={safeHref(c.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                          Görüntüle <ExternalLink className="size-3.5" />
+                        </a>
+                      ) : (
+                        <Pill tone="muted">
+                          <Clock className="size-3" /> Beklemede
+                        </Pill>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )}
+
             <Section title="Eğitim" empty="Henüz eğitim eklenmedi.">
               {data.education.length > 0 && (
                 <ul className="grid gap-3">
@@ -326,18 +364,26 @@ export function ProfileView({
 
           <aside className="grid content-start gap-6">
             <div className="rounded-3xl bg-navy p-6 text-on-navy">
-              <p className="text-xs tracking-[0.08em] text-on-navy-muted uppercase">Lig puanı</p>
-              <p className="mt-3 text-6xl leading-none font-semibold text-cyan tabular-nums">
-                {data.score}
-              </p>
+              <p className="text-xs tracking-[0.08em] text-on-navy-muted uppercase">Sezon puanı</p>
+              <p className="mt-3 text-6xl leading-none font-semibold text-cyan tabular-nums">{data.score}</p>
+              <p className="mt-1 text-xs text-on-navy-muted">Tüm zamanlar: {data.total}</p>
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
                 <span className="rounded-full bg-lav px-3 py-1 text-xs font-semibold text-secondary-foreground">{levelLabel(data.level)}</span>
                 {data.rank.rank > 0 && (
                   <span className="text-on-navy-muted">
-                    {data.rank.rank}. sıra · {data.field || "Tüm alanlar"}
+                    {data.rank.rank}. / {data.rank.of}
                   </span>
                 )}
               </div>
+              {data.badges.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {data.badges.map((b) => (
+                    <span key={b.label} className="inline-flex items-center gap-1.5 rounded-full bg-cyan/15 px-3 py-1 text-xs font-semibold text-cyan">
+                      {b.kind === "Sezon şampiyonu" ? <Crown className="size-3.5" /> : <HeartHandshake className="size-3.5" />} {b.label}
+                    </span>
+                  ))}
+                </div>
+              )}
               {own && (
                 <Link href="/puan" className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-cyan hover:underline">
                   Puanım nereden geliyor? →
@@ -346,6 +392,8 @@ export function ProfileView({
             </div>
 
             {sidebarTop}
+
+            {own && <ReadmeBadge username={data.username} />}
 
             <Section title="Beceriler" empty="Henüz beceri eklenmedi.">
               {data.skills.length > 0 && (
@@ -398,7 +446,50 @@ export function ProfileView({
   );
 }
 
-export function ProfileActionsOther({ username, connected, onConnect, onMessage }: { username: string; connected: boolean; onConnect: () => void; onMessage: () => void }) {
+/** GitHub README'ye eklenecek canlı rozet (lig + sezon puanı). */
+function ReadmeBadge({ username }: { username: string }) {
+  const site = useIsClient() ? window.location.origin : "";
+  const md = `[![TLTpulse](${site}/rozet/${username})](${site}/u/${username})`;
+  return (
+    <Card>
+      <h2 className="font-semibold">README rozeti</h2>
+      <p className="mt-1 text-sm text-muted-foreground">GitHub profiline ekle; ligin ve sezon puanın canlı görünsün.</p>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`/rozet/${username}`} alt="TLTpulse rozeti" className="mt-3 h-5" />
+      <button
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(md);
+            toast.success("Markdown kopyalandı", { description: "GitHub profilindeki README.md'ye yapıştır." });
+          } catch {
+            toast.error("Kopyalanamadı");
+          }
+        }}
+        className={btn("outline", "sm", "mt-3")}
+      >
+        <Copy /> Markdown&apos;ı kopyala
+      </button>
+    </Card>
+  );
+}
+
+export function ProfileActionsOther({
+  username,
+  connected,
+  blocked,
+  onConnect,
+  onMessage,
+  onBlock,
+  onReport,
+}: {
+  username: string;
+  connected: boolean;
+  blocked?: boolean;
+  onConnect: () => void;
+  onMessage: () => void;
+  onBlock?: () => void;
+  onReport?: () => void;
+}) {
   return (
     <>
       <button onClick={onMessage} className={btn("primary")}>
@@ -418,6 +509,25 @@ export function ProfileActionsOther({ username, connected, onConnect, onMessage 
       <Link href={`/u/${username}/cv`} className={btn("ghost")}>
         CV <ExternalLink />
       </Link>
+      {(onBlock || onReport) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger className={btn("ghost", "md", "px-3")} aria-label="Diğer işlemler">
+            <MoreHorizontal />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 p-1">
+            {onReport && (
+              <DropdownMenuItem onClick={onReport}>
+                <Flag /> Şikayet et
+              </DropdownMenuItem>
+            )}
+            {onBlock && (
+              <DropdownMenuItem variant="destructive" onClick={onBlock}>
+                <ShieldOff /> {blocked ? "Engeli kaldır" : "Engelle"}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { FileText, PencilLine, Sparkles } from "lucide-react";
+import { FileText, FileUp, PencilLine, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AddProjectDialog } from "@/components/add-project-dialog";
 import { CertificateDialog } from "@/components/certificate-dialog";
+import { CvUploadDialog } from "@/components/cv-upload-dialog";
 import { Card, PageShell } from "@/components/page-shell";
 import { ProfileEditDialog } from "@/components/profile-edit-dialog";
 import { ProfileView } from "@/components/profile-view";
@@ -23,6 +24,8 @@ function MyProfile() {
   const roadmap = useApp((s) => s.roadmap);
   const people = useApp((s) => s.people);
   const competitionHistory = useApp((s) => s.competitionHistory);
+  const badges = useApp((s) => s.badges);
+  const credentials = useApp((s) => s.credentials);
   const score = useMyScore();
   const params = useSearchParams();
   const router = useRouter();
@@ -32,6 +35,7 @@ function MyProfile() {
   const [cert, setCert] = useState(() => !!params.get("sertifika"));
   const [ref, setRef] = useState<{ open: boolean; preset?: string }>(() => ({ open: !!params.get("onay") }));
   const [addProject, setAddProject] = useState(false);
+  const [cv, setCv] = useState(() => !!params.get("cv"));
 
   useEffect(() => {
     if (params.size) router.replace("/profil", { scroll: false });
@@ -46,19 +50,25 @@ function MyProfile() {
         own
         data={{
           ...profile,
-          projects: projects.map((p) => ({ id: p.id, name: p.name, techs: p.techs, description: p.description, difficulty: p.analysis.difficulty, quality: p.analysis.quality, points: p.analysis.points, repoUrl: p.repoUrl })),
+          projects: projects.filter((p) => p.status === "hazır").map((p) => ({ id: p.id, name: p.name, techs: p.techs, description: p.description, difficulty: p.analysis.difficulty, quality: p.analysis.quality, points: p.analysis.points, repoUrl: p.repoUrl })),
           references,
           certs,
           competitions: competitionHistory,
           connections: profile.connections.map((u) => people[u] ?? { username: u, name: u, field: "" }),
-          score: score.total,
+          score: score.season,
+          total: score.total,
           level: score.level,
           rank: score.rank,
+          badges,
+          credentials,
         }}
         actions={
           <>
             <button onClick={() => setEdit(true)} className={btn("primary")}>
               <PencilLine /> Profili düzenle
+            </button>
+            <button onClick={() => setCv(true)} className={btn("outline")}>
+              <FileUp /> CV&apos;mi yükle
             </button>
             <Link href={`/u/${profile.username}/cv`} className={btn("outline")}>
               <FileText /> Doğrulanmış CV
@@ -125,6 +135,7 @@ function MyProfile() {
       <CertificateDialog open={cert} onOpenChange={setCert} />
       <ReferenceDialog open={ref.open} preset={ref.preset} onOpenChange={(o) => setRef({ open: o })} />
       <AddProjectDialog open={addProject} onOpenChange={setAddProject} />
+      <CvUploadDialog open={cv} onOpenChange={setCv} />
     </>
   );
 }

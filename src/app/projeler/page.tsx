@@ -1,72 +1,80 @@
 "use client";
 
-import { Check, CircleCheck, CircleDashed, ExternalLink, GitBranch, Plus, Search, Trash2 } from "lucide-react";
+import { Check, Clock, ExternalLink, GitBranch, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { removeProject } from "@/app/actions/projects";
-import { AddProjectDialog } from "@/components/add-project-dialog";
+import { reanalyzeProject, removeProject, retryMyProject } from "@/app/actions/projects";
+import { AddProjectDialog, AnalysisView } from "@/components/add-project-dialog";
 import { Modal } from "@/components/modal";
 import { Container, PageHero, PageShell, Pill, Segmented } from "@/components/page-shell";
 import { btn, inputClass } from "@/lib/btn";
 import { fmtDate } from "@/lib/competitions";
 import { safeHref } from "@/lib/safe";
-import { DIFFICULTY_POINTS, levelLabel, QUALITY_POINTS } from "@/lib/score";
+import { DIFFICULTY_POINTS, levelLabel } from "@/lib/score";
 import { useAct, useApp, useMyScore } from "@/lib/store";
 import type { Project } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function ProjectDetail({ project, onClose }: { project: Project | null; onClose: () => void }) {
   const act = useAct();
+  const [busy, setBusy] = useState<"" | "yeniden" | "sil">("");
   if (!project) return null;
   const a = project.analysis;
-  const checks = [
-    ["README", a.checks.readme],
-    ["Testler", a.checks.tests],
-    ["CI", a.checks.ci],
-    ["Canlı demo", a.checks.demo],
-    ["50+ commit", a.commits > 50],
-  ] as const;
+  const repo = project.repoUrl.replace("https://github.com/", "");
+  const pending = project.status === "analiz bekliyor";
+
+  const reanalyze = async () => {
+    setBusy("yeniden");
+    const res = pending ? await act(retryMyProject(project.id)) : await act(reanalyzeProject(project.id));
+    setBusy("");
+    if (!res) return;
+    if ("after" in res) {
+      const d = res.after - res.before;
+      toast.success("Yeniden analiz edildi", { description: d === 0 ? "Puan değişmedi." : `${d > 0 ? "+" : ""}${d} puan bu sezona yazıldı.` });
+    } else toast.success("Analiz tamamlandı");
+    onClose();
+  };
+
   return (
     <Modal open={!!project} onOpenChange={(o) => !o && onClose()} title={project.name} description={project.description} className="sm:max-w-xl">
       <div className="grid gap-5">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-2xl bg-navy p-4 text-on-navy">
-            <span className="block text-xs text-on-navy-muted">Puan</span>
-            <b className="text-3xl text-cyan">+{a.points}</b>
+        {pending ? (
+          <div className="flex items-center gap-3 rounded-2xl bg-muted p-4 text-sm">
+            <Clock className="size-5 shrink-0 text-primary" />
+            <span>Zorluk analizi bekliyor. Günlük iş her gün tekrar dener; istersen şimdi de deneyebilirsin.</span>
           </div>
-          <div className="rounded-2xl bg-muted p-4">
-            <span className="block text-xs text-muted-foreground">Zorluk</span>
-            <b className="text-lg">{a.difficulty}</b>
-            <span className="block text-xs text-muted-foreground">+{DIFFICULTY_POINTS[a.difficulty]}</span>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-2xl bg-navy p-4 text-on-navy">
+              <span className="block text-xs text-on-navy-muted">Puan</span>
+              <b className="text-3xl text-cyan">+{a.points}</b>
+            </div>
+            <div className="rounded-2xl bg-muted p-4">
+              <span className="block text-xs text-muted-foreground">Zorluk (AI)</span>
+              <b className="text-lg">{a.difficulty}</b>
+              <span className="block text-xs text-muted-foreground">+{DIFFICULTY_POINTS[a.difficulty]}</span>
+            </div>
+            <div className="rounded-2xl bg-muted p-4">
+              <span className="block text-xs text-muted-foreground">Kalite</span>
+              <b className="text-lg">{a.quality}</b>
+              <span className="block text-xs text-muted-foreground">{a.difficulty === "Kolay" ? "sayılmaz" : `+${a.qualityPoints}`}</span>
+            </div>
           </div>
-          <div className="rounded-2xl bg-muted p-4">
-            <span className="block text-xs text-muted-foreground">Kalite</span>
-            <b className="text-lg">{a.quality}</b>
-            <span className="block text-xs text-muted-foreground">+{QUALITY_POINTS[a.quality]}</span>
-          </div>
-        </div>
-        <div>
-          <h3 className="mb-2 text-sm font-semibold">Kalite ölçütleri</h3>
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {checks.map(([k, v]) => (
-              <li key={k} className={cn("flex items-center gap-2 text-sm", !v && "text-muted-foreground")}>
-                {v ? <CircleCheck className="size-4 text-ok" /> : <CircleDashed className="size-4" />} {k}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="text-sm leading-relaxed text-muted-foreground">{a.summary}</p>
+        )}
+        <AnalysisView analysis={a} repo={repo} sha={a.commitSha} />
         <dl className="grid grid-cols-2 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Commit yazarlığı</dt>
-          <dd className="text-right font-semibold">%{a.authorship}</dd>
-          <dt className="text-muted-foreground">Commit sayısı</dt>
-          <dd className="text-right font-semibold">{a.commits}</dd>
           <dt className="text-muted-foreground">Nasıl yapıldı</dt>
           <dd className="text-right font-semibold">{project.role}</dd>
           <dt className="text-muted-foreground">Eklendi</dt>
           <dd className="text-right font-semibold">{fmtDate(project.addedAt)}</dd>
+          {a.commitSha && (
+            <>
+              <dt className="text-muted-foreground">Analiz edilen commit</dt>
+              <dd className="text-right font-mono text-xs">{a.commitSha.slice(0, 7)}</dd>
+            </>
+          )}
         </dl>
         <div className="flex flex-wrap gap-1.5">
           {project.techs.map((t) => (
@@ -74,16 +82,25 @@ function ProjectDetail({ project, onClose }: { project: Project | null; onClose:
           ))}
         </div>
         <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
-          <button
-            onClick={async () => {
-              if (!(await act(removeProject(project.id)))) return;
-              toast(`${project.name} kaldırıldı`);
-              onClose();
-            }}
-            className={btn("ghost", "md", "text-destructive")}
-          >
-            <Trash2 /> Kaldır
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                setBusy("sil");
+                const ok = await act(removeProject(project.id));
+                setBusy("");
+                if (!ok) return;
+                toast(`${project.name} kaldırıldı`, { description: "Puanı geri alındı." });
+                onClose();
+              }}
+              disabled={!!busy}
+              className={btn("ghost", "md", "text-destructive")}
+            >
+              <Trash2 /> Kaldır
+            </button>
+            <button onClick={reanalyze} disabled={!!busy} className={btn("outline")} title="Repoya yeni commit geldiyse puanı günceller">
+              <RefreshCw className={cn(busy === "yeniden" && "animate-spin")} /> {pending ? "Şimdi dene" : "Yeniden analiz et"}
+            </button>
+          </div>
           <div className="flex gap-2">
             {safeHref(project.demoUrl) && (
               <a href={safeHref(project.demoUrl)} target="_blank" rel="noreferrer" className={btn("outline")}>
@@ -121,7 +138,8 @@ function Projects() {
     return sort === "puan" ? [...f].sort((a, b) => b.analysis.points - a.analysis.points) : f;
   }, [projects, q, sort]);
 
-  const projPart = score.parts.find((p) => p.source === "Projeler")!;
+  const projPart = score.parts.find((p) => p.source === "Projeler") ?? { points: 0 };
+  const projAll = score.allParts.find((p) => p.source === "Projeler") ?? { points: 0 };
 
   return (
     <>
@@ -131,9 +149,8 @@ function Projects() {
         highlight="bir adım."
         right={
           <div className="text-left sm:text-right">
-            <p className="text-6xl leading-none font-semibold text-cyan tabular-nums">
-              {score.total}
-            </p>
+            <p className="text-6xl leading-none font-semibold text-cyan tabular-nums">{score.season}</p>
+            <span className="mt-1 block text-xs text-on-navy-muted">sezon puanı</span>
             <span className="mt-3 inline-block rounded-full bg-lav px-3 py-1 text-xs font-semibold text-secondary-foreground">{levelLabel(score.level)}</span>
             <Link href="/lig" className="mt-3 block text-xs text-cyan hover:underline">
               Lig sıram: {score.rank.rank}. ↗
@@ -163,7 +180,7 @@ function Projects() {
         </div>
 
         <p className="mb-5 text-sm text-muted-foreground">
-          Projelerden gelen puan: <b className="text-foreground">{projPart.points}</b>
+          Projelerden bu sezon <b className="text-foreground">{projPart.points}</b> puan · tüm zamanlar <b className="text-foreground">{projAll.points}</b>
         </p>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -173,9 +190,15 @@ function Projects() {
                 <span className="grid size-10 place-items-center rounded-xl bg-muted">
                   <GitBranch className="size-5" />
                 </span>
-                <Pill tone="ok">
-                  <Check className="size-3" /> Onaylı
-                </Pill>
+                {p.status === "analiz bekliyor" ? (
+                  <Pill tone="muted">
+                    <Clock className="size-3" /> Analiz bekliyor
+                  </Pill>
+                ) : (
+                  <Pill tone="ok">
+                    <Check className="size-3" /> Kodla kanıtlı
+                  </Pill>
+                )}
               </div>
               <h2 className="mt-5 text-xl font-semibold">{p.name}</h2>
               <p className="mt-1.5 line-clamp-2 min-h-10 text-sm text-muted-foreground">{p.description}</p>
@@ -188,7 +211,13 @@ function Projects() {
               </div>
               <div className="mt-auto flex items-center justify-between border-t pt-4 text-sm">
                 <span className="text-muted-foreground">
-                  {p.analysis.difficulty} · {p.analysis.quality} · <b className="text-primary">+{p.analysis.points}</b>
+                  {p.status === "analiz bekliyor" ? (
+                    "Puan analizden sonra"
+                  ) : (
+                    <>
+                      {p.analysis.difficulty} · {p.analysis.quality} · <b className="text-primary">+{p.analysis.points}</b>
+                    </>
+                  )}
                 </span>
                 <button onClick={() => setDetail(p)} className="font-semibold text-primary hover:underline">
                   Detayları gör

@@ -2,6 +2,7 @@
 //   node scripts/setup.mjs migrate   -> supabase/migrations/*.sql dosyalarını sırayla, bir kez uygular
 //   node scripts/setup.mjs auth      -> giriş ayarları: Gmail SMTP, e-posta doğrulama, Türkçe şablonlar, izinli adresler
 //   node scripts/setup.mjs types     -> veritabanı tiplerini src/lib/database.types.ts'e üretir
+//   node scripts/setup.mjs admin <e-posta> [kaldir] -> kullanıcıyı yönetici yapar (arayüzde "admin yap" yok, bilerek)
 import fs from "node:fs";
 import { management, sql } from "./sql.mjs";
 
@@ -69,10 +70,19 @@ async function types() {
   console.log("src/lib/database.types.ts yazıldı.");
 }
 
+async function admin() {
+  const email = (process.argv[3] ?? "").trim().toLowerCase();
+  if (!/^[^\s@']+@[^\s@']+\.[^\s@']+$/.test(email)) throw new Error("Kullanım: node scripts/setup.mjs admin <e-posta> [kaldir]");
+  const on = process.argv[4] !== "kaldir";
+  const rows = await sql(`update public.profiles set is_admin = ${on} where id = (select id from auth.users where lower(email) = '${email}') returning username, is_admin;`);
+  if (!rows.length) throw new Error("Bu e-postayla bir kullanıcı (ve profil) bulunamadı.");
+  console.log(on ? "yönetici yapıldı:" : "yöneticilik kaldırıldı:", rows[0].username);
+}
+
 const cmd = process.argv[2];
-const run = { migrate, auth, types }[cmd];
+const run = { migrate, auth, types, admin }[cmd];
 if (!run) {
-  console.log("Kullanım: node scripts/setup.mjs migrate | auth | types");
+  console.log("Kullanım: node scripts/setup.mjs migrate | auth | types | admin <e-posta> [kaldir]");
   process.exit(1);
 }
 run().catch((e) => {

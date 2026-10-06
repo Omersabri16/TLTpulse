@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { markSeasonSeen } from "@/app/actions/account";
 import { refreshMe } from "@/app/actions/auth";
+import { celebrateSeason } from "@/lib/celebrate";
 import { useAct, useApp } from "@/lib/store";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { fmtRelative } from "@/lib/time";
@@ -15,6 +17,19 @@ export function RealtimeBridge() {
   const addNotification = useApp((s) => s.addNotification);
   const act = useAct();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const seasonResult = useApp((s) => s.seasonResult);
+  const shown = useRef(false);
+
+  // Sezon kapandıktan sonraki ilk girişte lig değişimi (konfeti) bir kez gösterilir.
+  useEffect(() => {
+    if (!seasonResult || shown.current) return;
+    shown.current = true;
+    const t = setTimeout(() => {
+      celebrateSeason(seasonResult);
+      void act(markSeasonSeen(), { silent: true });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [seasonResult, act]);
 
   useEffect(() => {
     if (!username) return;

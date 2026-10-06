@@ -4,6 +4,7 @@ import { GoogleGenAI, Type, type ContentListUnion, type GenerateContentConfig } 
 import { z } from "zod";
 import { ROADMAP_CHECKS, STEP_RULES, TARGET_SKILLS, type RoadmapContext } from "@/lib/score";
 import type { Field, RoadmapCheck, RoadmapStep } from "@/lib/types";
+import { db } from "./admin";
 
 // Profil metni güvenilmeyen veridir (prompt injection). Talimatlar sadece sistem kısmında;
 // kullanıcı verisi işaretli blokta. Çıktı şemayla istenir ve zod ile doğrulanır.
@@ -53,9 +54,29 @@ function profileBlock(ctx: RoadmapContext, target: Field) {
 
 const MODELS = () => [...new Set([process.env.GEMINI_MODEL || "gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest"])];
 
-/** Gemini çağrısı; yoğunluk ya da kota hatasında sıradaki modele geçer. Anahtar yoksa null. */
-export async function generate(contents: ContentListUnion, config: () => GenerateContentConfig) {
+/**
+ * Ücretsiz katman günde ~1500 istek ve bütün özellikler aynı kotayı paylaşıyor. Günlük toplam bu sınırlara gelince
+ * o özellik Gemini'ye gitmez (asistan hazır cevaplara, yol haritası kurala düşer); öncelik proje analizinde.
+ */
+export const GEMINI_BUDGET = { asistan: 900, yol: 1100, cv: 1200, proje: 1400, sartname: 1400 } as const;
+export type GeminiKind = keyof typeof GEMINI_BUDGET;
+
+export class QuotaError extends Error {
+  constructor() {
+    super("Gemini günlük kotası doldu.");
+  }
+}
+
+async function takeQuota(kind: GeminiKind) {
+  const r = await db().rpc("gemini_take", { p_kind: kind, p_limit: GEMINI_BUDGET[kind] });
+  // Sayaç okunamazsa engelleme: Gemini'nin kendi kotası zaten son sınır.
+  return r.error ? true : r.data === true;
+}
+
+/** Gemini çağrısı; yoğunluk ya da kota hatasında sıradaki modele geçer. Anahtar yoksa null, günlük bütçe dolduysa QuotaError. */
+export async function generate(contents: ContentListUnion, config: () => GenerateContentConfig, kind: GeminiKind) {
   if (!process.env.GEMINI_API_KEY) return null;
+  if (!(await takeQuota(kind))) throw new QuotaError();
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   let last: unknown;
   for (const model of MODELS()) {
@@ -95,7 +116,7 @@ const CONFIG = (): GenerateContentConfig => ({
 
 export async function aiRoadmap(ctx: RoadmapContext, target: Field, openComp: { id: string } | null): Promise<{ summary: string; steps: RoadmapStep[] } | null> {
   try {
-    const res = await generate(profileBlock(ctx, target), CONFIG);
+    const res = await generate(profileBlock(ctx, target), CONFIG, "yol");
     if (!res) return null;
     const parsed = Output.safeParse(JSON.parse(res.text ?? ""));
     if (!parsed.success) {

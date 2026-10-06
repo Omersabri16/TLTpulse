@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { register } from "@/app/actions/auth";
+import { toast } from "sonner";
 import { AuthCard, GoogleButton, OrDivider } from "@/components/auth-card";
+import { KvkkConsent } from "@/components/kvkk-consent";
 import { btn, inputClass } from "@/lib/btn";
 import { useAct } from "@/lib/store";
 
@@ -15,6 +17,7 @@ export default function Page() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
+  const [kvkk, setKvkk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sentTo, setSentTo] = useState("");
 
@@ -50,8 +53,9 @@ export default function Page() {
         className="grid gap-3"
         onSubmit={async (e) => {
           e.preventDefault();
+          if (!kvkk) return toast.error("Devam etmek için aydınlatma metnini okuyup onay vermelisin.");
           setBusy(true);
-          const res = await act(register({ name, email, password: pw }));
+          const res = await act(register({ name, email, password: pw, kvkk: true }));
           setBusy(false);
           if (!res) return;
           if (res.needsConfirm) return setSentTo(email.trim());
@@ -71,6 +75,7 @@ export default function Page() {
           Şifre
           <input className={inputClass} type="password" autoComplete="new-password" required minLength={8} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="En az 8 karakter" />
         </label>
+        <KvkkConsent checked={kvkk} onChange={setKvkk} />
         <button disabled={busy} className={btn("primary", "lg", "mt-2 w-full")}>
           {busy ? "Hesap açılıyor…" : "Kayıt ol"}
         </button>

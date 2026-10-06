@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { addCertificate, checkCertificate } from "@/app/actions/projects";
 import { Choice, Field, Modal } from "@/components/modal";
 import { btn, inputClass } from "@/lib/btn";
-import { celebrateIfLevelUp } from "@/lib/celebrate";
+import { celebrateIfAboveLine } from "@/lib/celebrate";
 import { isHttpUrl } from "@/lib/safe";
 import { useAct, useApp, useMyScore } from "@/lib/store";
 import type { CertProvider, CertStatus } from "@/lib/types";
@@ -59,11 +59,10 @@ function CertificateBody({ onOpenChange }: { onOpenChange: (o: boolean) => void 
   const save = async () => {
     if (!res) return;
     setBusy(true);
-    const before = score.total;
     const r = await act(addCertificate(input()));
     setBusy(false);
     if (!r) return;
-    if (!celebrateIfLevelUp(before, r.me.score.total)) toast.success("Sertifika eklendi", { description: r.points ? `+${r.points} puan` : undefined });
+    if (!celebrateIfAboveLine(score, r.me.score)) toast.success("Sertifika eklendi", { description: r.points ? `+${r.points} puan` : undefined });
     onOpenChange(false);
   };
 

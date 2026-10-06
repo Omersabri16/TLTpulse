@@ -6,16 +6,15 @@ import { useState, type ReactNode } from "react";
 import { PulseLine } from "@/components/brand";
 import { PageShell, Pill } from "@/components/page-shell";
 import { btn } from "@/lib/btn";
-import { levelOf } from "@/lib/score";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 const DEMO_REPOS = [
-  { name: "pulse-api", pts: 10 },
-  { name: "taskflow", pts: 7 },
-  { name: "query-lab", pts: 6 },
-  { name: "edge-cache", pts: 8 },
-  { name: "notes-app", pts: 5 },
+  { name: "pulse-api", pts: 94 },
+  { name: "taskflow", pts: 60 },
+  { name: "query-lab", pts: 48 },
+  { name: "edge-cache", pts: 82 },
+  { name: "notes-app", pts: 10 },
 ];
 
 function AuthButtons({ size = "lg" as const }) {
@@ -65,7 +64,7 @@ function Row({ title, sub, right, strike }: { title: string; sub?: string; right
 
 export function HomeView() {
   const [on, setOn] = useState<number[]>([0, 1]);
-  const score = 46 + on.reduce((a, i) => a + DEMO_REPOS[i].pts, 0);
+  const score = on.reduce((a, i) => a + DEMO_REPOS[i].pts, 0);
   const toggle = (i: number) => setOn((o) => (o.includes(i) ? o.filter((x) => x !== i) : [...o, i]));
 
   return (
@@ -88,7 +87,7 @@ export function HomeView() {
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
               <div className="flex items-baseline gap-3">
                 <span className="text-6xl leading-none font-semibold text-cyan tabular-nums">{score}</span>
-                <span className="text-sm text-on-navy-muted">{levelOf(score) === "Yeni başlayan" ? "Yeni başlayan ligi" : `${levelOf(score)} lig`}</span>
+                <span className="text-sm text-on-navy-muted">{score >= 100 ? "sezon puanı · yükselme çizgisinin üstünde" : "sezon puanı"}</span>
               </div>
               <div className="flex flex-wrap gap-2" aria-label="Örnek repolar">
                 {DEMO_REPOS.map((r, i) => (
@@ -113,37 +112,39 @@ export function HomeView() {
       </section>
 
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-        <Chapter no="01" title="Projelerini ekle." text={<>GitHub linkini yapıştır, projeni kısaca anlat. Sistem projeyi <b>zorluk ve kaliteye göre</b> analiz eder: test, CI, README ve commit geçmişine bakar. Sadece senin yazdığın repolar sayılır.</>}>
-          <Row title="pulse-api" sub="Zor · Çok iyi" right={<Pill tone="ok">+10 puan</Pill>} />
-          <Row title="taskflow" sub="Orta · İyi" right={<Pill tone="ok">+7 puan</Pill>} />
-          <Row title="awesome-list" sub="Commit'lerin %2'si senin" strike right={<Pill tone="danger">Eklenemez</Pill>} />
+        <Chapter no="01" title="Projelerini ekle." text={<>GitHub linkini yapıştır, projeni bir cümleyle anlat. <b>AI kodu okuyup zorluğu sınıflandırır</b> ve gerekçesini dosyayla gösterir; puanı kural verir. Kopya ve şablon kod sayılmaz, sadece senin yazdığın repolar.</>}>
+          <Row title="pulse-api" sub="Zor · WebSocket sunucusu: server/ws.ts" right={<Pill tone="ok">+94 puan</Pill>} />
+          <Row title="taskflow" sub="Orta · Giriş ve veritabanı: src/auth.ts" right={<Pill tone="ok">+60 puan</Pill>} />
+          <Row title="todo-klon" sub="Dosyaların %92'si başka bir projede" strike right={<Pill tone="danger">Kopya</Pill>} />
         </Chapter>
 
         <Chapter no="02" title="Puanın altı yerden gelir." text={<>Projeler, yarışmalar, takım arkadaşlarının verdiği <b>akran puanı</b>, sertifikalar, amir ya da hocanın onayı ve yol haritasındaki adımlar. Hepsi kural tabanlı ve üst sınır yok: ne kadar çok iş, o kadar puan.</>}>
           {[
-            ["Projeler", "proje başı 4–10"],
-            ["Yarışmalar", "katılım 4, ilk üç +8/6/4"],
-            ["Akran puanı", "yarışma başı 15'e kadar"],
-            ["Sertifikalar", "1–4"],
-            ["Amir ve hoca onayı", "2–6"],
-            ["Yol haritası", "adım başı 1–2"],
+            ["Projeler", "proje başı 100'e kadar"],
+            ["Yarışmalar", "zorluğa göre 100 / 150 / 200'e kadar"],
+            ["Akran puanı", "yarışma başı 30'a kadar"],
+            ["Sertifikalar", "5–25"],
+            ["Amir ve hoca onayı", "10–35"],
+            ["Yol haritası", "adım başı 5–10"],
           ].map(([l, m]) => (
             <Row key={l} title={l} right={<span className="text-xs text-muted-foreground">{m}</span>} />
           ))}
         </Chapter>
 
-        <Chapter no="03" title="Ligde yerini gör." text={<>Puanına göre üç ligden birindesin: <b>Yeni başlayan, Orta, Kıdemli.</b></>}>
+        <Chapter no="03" title="Sezonda yüksel." text={<>Herkes <b>Yeni başlayan</b> liginde başlar. 6 aylık sezonun sonunda her ligin <b>ilk 20&apos;si</b> bir üst lige çıkar: Orta, sonra Kıdemli. Kıdemli&apos;nin ilk 20&apos;si sezon şampiyonu olur.</>}>
           <div className="flex flex-wrap gap-2 py-4">
-            <Pill tone="muted">Yeni başlayan · 0–59</Pill>
-            <Pill tone="lav">Orta · 60–79</Pill>
-            <Pill tone="muted">Kıdemli · 80+</Pill>
+            <Pill tone="muted">Yeni başlayan</Pill>
+            <Pill tone="lav">Orta</Pill>
+            <Pill tone="muted">Kıdemli</Pill>
           </div>
-          <Row title="01 · Ece Yılmaz" sub="Frontend" right={<b className="text-lg text-cyan-ink">79</b>} />
-          <Row title="02 · Arda Demir" sub="Backend" right={<b className="text-lg text-cyan-ink">78</b>} />
+          <Row title="19 · Ece Yılmaz" sub="Frontend" right={<b className="text-lg text-cyan-ink">212</b>} />
+          <Row title="20 · Arda Demir" sub="Backend" right={<b className="text-lg text-cyan-ink">198</b>} />
+          <div className="flex items-center gap-2 border-t py-2 text-xs font-semibold text-ok">▲ Yükselme çizgisi</div>
+          <Row title="21 · Sen" sub="Bir proje daha ekle" right={<b className="text-lg text-cyan-ink">176</b>} />
         </Chapter>
 
-        <Chapter no="04" title="Yarışmada takım kur." text={<>Her yarışma pozisyonları söyler. Sen birine başvurursun, <b>sistem seni dengeli bir takıma yerleştirir.</b> Takımın özel sohbeti olur, işi GitHub reposu olarak teslim edersiniz. Sonunda takım arkadaşların seni puanlar.</>}>
-          <Row title="Y-07 · Şehrin Nabzı" sub="Son başvuru 12 Ekim" right={<Pill tone="ok">Başvurular açık</Pill>} />
+        <Chapter no="04" title="Yarışmada takım kur." text={<>Her yarışmanın bir şartnamesi var. Bir pozisyona başvurursun, <b>sistem seni dengeli bir takıma yerleştirir.</b> Kazanan yok: takımınız şartnameyi ne kadar karşılarsa o kadar puan alırsınız. Değerlendirmeyi gizli testler yapar, insan değil.</>}>
+          <Row title="Y-07 · Etkinlik Kayıt" sub="Orta · en fazla 150 puan" right={<Pill tone="ok">Başvurular açık</Pill>} />
           <div className="grid grid-cols-3 gap-2 pb-4">
             {[
               ["Frontend", "Ece"],
@@ -165,9 +166,9 @@ export function HomeView() {
         </Chapter>
 
         <Chapter no="06" title="Sıradaki adımını bil." text={<>Profilin dolunca AI, hedef pozisyonuna göre <b>sana özel bir yol haritası</b> çıkarır. Adımları tamamladıkça puan kazanırsın. Bağlantılarınla mesajlaş, takım arkadaşların ağında kalsın.</>}>
-          <Row title="İlk projeni görünür kıl" right={<Pill tone="ok">✓ +2</Pill>} />
-          <Row title="Testleri olan bir proje ekle" right={<Pill tone="ok">✓ +2</Pill>} />
-          <Row title="Y-07'de Backend pozisyonuna başvur" right={<Pill tone="lav">+2 puan</Pill>} />
+          <Row title="İlk projeni görünür kıl" right={<Pill tone="ok">✓ +10</Pill>} />
+          <Row title="Testleri CI'da yeşil geçen bir proje ekle" right={<Pill tone="ok">✓ +10</Pill>} />
+          <Row title="Y-07'de Backend pozisyonuna başvur" right={<Pill tone="lav">+5 puan</Pill>} />
         </Chapter>
       </div>
 

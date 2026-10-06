@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { Assistant } from "@/components/assistant";
@@ -55,6 +56,9 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <Logo className="text-lg text-foreground" />
         <span>Yetenek, ürettikçe görünür.</span>
+        <Link href="/gizlilik" className="hover:text-foreground">
+          Gizlilik
+        </Link>
         <span>© 2026 TLTpulse</span>
         <span>RHINOTRON8</span>
       </div>

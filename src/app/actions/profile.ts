@@ -4,7 +4,8 @@ import { z } from "zod";
 import { check, FIELD, run, text, UserError } from "@/lib/server/action";
 import { db } from "@/lib/server/admin";
 import { requireUser } from "@/lib/server/auth";
-import { bioHasCode } from "@/lib/server/github";
+import { blockedBetween } from "@/lib/server/blocks";
+import { bioHasCode, GitHubError } from "@/lib/server/github";
 import { loadMe } from "@/lib/server/me";
 import { notify } from "@/lib/server/notify";
 import { newGithubCode } from "@/lib/server/profile-init";
@@ -79,7 +80,10 @@ export async function verifyGithub() {
     };
     if (!p.github) throw new UserError("Önce GitHub kullanıcı adını ekle.");
     if (!p.github_verified) {
-      if (!(await bioHasCode(p.github, p.github_code)))
+      const found = await bioHasCode(p.github, p.github_code).catch((e) => {
+        throw e instanceof GitHubError ? new UserError(e.message) : e;
+      });
+      if (!found)
         throw new UserError(`@${p.github} profilinin açıklamasında (bio) "${p.github_code}" kodunu bulamadık. Kaydettikten sonra birkaç saniye bekleyip tekrar dene.`);
       check(await db().from("profiles").update({ github_verified: true }).eq("id", user.id), "doğrulama");
     }
@@ -100,6 +104,7 @@ export async function connect(username: string) {
     const user = await requireUser();
     const other = await userIdOf(username);
     if (other.id === user.id) throw new UserError("Kendinle bağlantı kuramazsın.");
+    if (await blockedBetween(user.id, other.id)) throw new UserError("Bu kişiyle bağlantı kuramazsın.");
     if (!(await allow(user.id, "connect", 100, 24))) throw new UserError("Bugün çok fazla bağlantı isteği gönderdin.");
     await db().from("connections").upsert(
       [
@@ -120,6 +125,7 @@ export async function startConversation(username: string) {
     const user = await requireUser();
     const other = await userIdOf(username);
     if (other.id === user.id) throw new UserError("Kendine mesaj gönderemezsin.");
+    if (await blockedBetween(user.id, other.id)) throw new UserError("Bu kişiye mesaj gönderemezsin.");
     const [a, b] = [user.id, other.id].sort();
     const found = await db().from("conversations").select("id").eq("user_a", a).eq("user_b", b).maybeSingle();
     let id = (found.data as { id: string } | null)?.id;

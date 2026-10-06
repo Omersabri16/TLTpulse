@@ -5,43 +5,45 @@ const FAQ: { keys: string[]; answer: string }[] = [
   {
     keys: ["puan", "hesap", "nereden", "kaynak", "nasıl"],
     answer:
-      "Puanın altı yerden gelir: projeler, yarışmalar, akran puanı, sertifikalar, amir/hoca onayları ve yol haritası adımları. Üst sınır yok; ne kadar çok kanıt, o kadar puan. Ayrıntısı \"Puanım\" sayfasında.",
+      "Puanın altı yerden gelir: projeler, yarışmalar, akran puanı, sertifikalar, amir/hoca onayları ve yol haritası adımları. Üst sınır yok. Lig sıran sadece bu sezon kazandığın puanla belirlenir; ayrıntısı \"Puanım\" sayfasında.",
   },
   {
     keys: ["proje", "ekle", "github", "repo"],
     answer:
-      "Önce Profili düzenle'den GitHub kullanıcı adını ekleyip doğrula (bio'na verilen kodu yazıyorsun). Sonra Projeler → Proje ekle'de repo linkini yapıştır. README, test, CI ve commit yazarlığı GitHub'dan otomatik okunur; zorluk ve kaliteye göre 4–10 puan alırsın.",
+      "Önce Profili düzenle'den GitHub kullanıcı adını ekleyip doğrula (bio'na verilen kodu yazıyorsun). Sonra Projeler → Proje ekle'de repo linkini yapıştır. AI kodu okuyup zorluğu sınıflandırır (Kolay 10, Orta 40, Zor 70), kalite en fazla 30: CI'da yeşil testler, açılan demo, anlamlı README, 10+ günde geliştirme. Kopya ve şablon kod puan almaz.",
   },
   {
     keys: ["onay", "staj", "amir", "hoca", "referans", "deneyim"],
     answer:
-      "Profilinde deneyiminin yanındaki \"Onay iste\"ye bas, amirinin ya da hocanın e-postasını gir. Ona tek kullanımlık bir link gider; hesap açmadan onaylar ve istersen yorum yazar. Kurumsal e-postadan gelen onay 5, kişisel e-postadan gelen 2 puan; yorum varsa +1.",
+      "Profilinde deneyiminin yanındaki \"Onay iste\"ye bas, amirinin ya da hocanın e-postasını gir. Ona tek kullanımlık bir link gider; hesap açmadan onaylar ve istersen yorum yazar. Kurumsal e-postadan gelen onay 30, kişisel e-postadan gelen 10 puan; yorum varsa +5.",
   },
   {
-    keys: ["yarışma", "takım", "başvur", "pozisyon"],
+    keys: ["yarışma", "takım", "başvur", "pozisyon", "şartname", "test"],
     answer:
-      "Yarışmalar sayfasında açık bir yarışma seç ve bir pozisyona başvur. Başvurular bitince sistem dengeli takımlar kurar; takımın özel sohbeti olur ve işi GitHub reposu olarak teslim edersiniz. Tamamlayınca 4 puan, ilk üçe girersen 8/6/4 puan daha.",
+      "Yarışmalar sayfasında bir yarışma seç ve bir pozisyona başvur; herkes her yarışmaya katılabilir. Başvurular bitince sistem dengeli takımlar kurar. Kazanan yok: takımın şartnameyi ne kadar karşılarsa o kadar puan alır (Kolay 100, Orta 150, Zor 200'e kadar; %50 altı 0). Gizli testler demonuza karşı otomatik çalışır.",
   },
   {
     keys: ["sertifika", "btk", "credly", "coursera", "udemy"],
     answer:
-      "Profilinde \"Sertifika ekle\" ile linki yapıştır. BTK Akademi ve Credly sertifikaları doğrulanırsa 4, Coursera ve Udemy 3 puan alır. Üzerindeki isim profilindekiyle uyuşmazsa puan verilmez.",
+      "Profilinde \"Sertifika ekle\" ile linki yapıştır. BTK Akademi 20, Credly 25 puan; doğrulanamayan sertifika 5. Üzerindeki isim profilindekiyle uyuşmazsa puan verilmez.",
   },
   {
-    keys: ["lig", "seviye", "kıdemli", "orta", "yeni başlayan"],
-    answer: "Üç lig var: Yeni başlayan (0–59), Orta (60–79) ve Kıdemli (80+). Puanın arttıkça bir üst lige geçersin; lig sıran aynı ligdeki herkese göre hesaplanır.",
+    keys: ["lig", "seviye", "kıdemli", "orta", "yeni başlayan", "sezon", "yüksel", "düş"],
+    answer:
+      "Ligler 6 aylık sezonlarla işler. Herkes Yeni başlayan liginde başlar; sezon sonunda her ligin ilk 20'si (en az 100 puanla) bir üst lige çıkar, Orta ve Kıdemli'nin son 20'si (100'ün altındaysa) düşer. Her sezon lig puanı sıfırdan başlar, kanıtların kalıcıdır.",
   },
   {
-    keys: ["akran", "yıldız", "arkadaş", "puanla"],
-    answer: "Yarışma bitince takım arkadaşların seni 1–5 yıldızla puanlar; puanlar anonimdir. Her yarışmada ortalaman 15 üzerinden puana eklenir.",
+    keys: ["akran", "yıldız", "arkadaş", "puanla", "mentor"],
+    answer: "Yarışma bitince takım arkadaşların seni 1–5 yıldızla puanlar; puanlar anonimdir. Her yarışmada ortalaman 30 üzerinden eklenir. Orta ya da Kıdemli ligdeysen ve takımındaki yeni başlayanlardan ortalama 4+ yıldız alırsan +15 mentor puanı ve rozet.",
   },
   {
     keys: ["yol", "harita", "adım"],
-    answer: "Yol haritası profilin en az %75 doluyken açılır. Hedef pozisyonunu seçersin, AI kanıtlarına bakıp sıradaki adımları çıkarır; adımları tamamladıkça 1–2 puan kazanırsın.",
+    answer: "Yol haritası profilin en az %75 doluyken açılır. Hedef pozisyonunu seçersin, AI kanıtlarına bakıp sıradaki adımları çıkarır; adımları tamamladıkça adım başına 5–10 puan kazanırsın.",
   },
   {
-    keys: ["cv", "doğrula", "qr"],
-    answer: "Profilinde \"Doğrulanmış CV\"ye bas. CV sadece kanıtı olan bilgileri içerir; üzerindeki QR kod ve doğrulama kodu ile işveren bilgilerin gerçek olduğunu kontrol edebilir.",
+    keys: ["cv", "doğrula", "qr", "yükle"],
+    answer:
+      "Profilinde \"CV'mi yükle\" ile PDF ya da Word CV'ni yükleyebilirsin; AI becerilerini ve deneyimlerini çıkarır, sen onaylarsın, dosya saklanmaz. \"Doğrulanmış CV\" ise sadece kanıtı olan bilgileri içerir; QR kodla işveren gerçek olduğunu kontrol eder.",
   },
 ];
 

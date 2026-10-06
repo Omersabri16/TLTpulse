@@ -2,32 +2,39 @@
 
 import { Award, FolderGit2, Map, ShieldCheck, Trophy, Users } from "lucide-react";
 import Link from "next/link";
-import { Card, Container, PageHero, PageShell } from "@/components/page-shell";
+import { useState } from "react";
+import { Card, Container, PageHero, PageShell, Segmented } from "@/components/page-shell";
 import { Progress } from "@/components/ui/progress";
 import { btn } from "@/lib/btn";
 import { fmtDate } from "@/lib/competitions";
+import { daysLeft } from "@/lib/time";
 import { levelLabel } from "@/lib/score";
 import { useApp, useMyScore } from "@/lib/store";
 import type { ScoreSource } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const INFO: Record<ScoreSource, { icon: typeof Award; rule: string; action: { label: string; href: string } }> = {
-  Projeler: { icon: FolderGit2, rule: "Her proje zorluğuna (kolay 2, orta 4, zor 6) ve kalitesine (test, CI, README, demo, commit geçmişi: 2–4) göre puan alır.", action: { label: "Proje ekle", href: "/projeler?ekle=1" } },
-  Yarışmalar: { icon: Trophy, rule: "Tamamlanan her yarışma 4 puan; ilk üçe giren takımlar ayrıca 8, 6 ya da 4 puan alır.", action: { label: "Yarışmalar", href: "/yarismalar" } },
-  "Akran puanı": { icon: Users, rule: "Yarışma bitince takım arkadaşların seni 1–5 arası puanlar. Her yarışmada ortalaman 15 üzerinden hesaplanır; yarışmalar toplanır.", action: { label: "Yarışmalar", href: "/yarismalar" } },
-  Sertifikalar: { icon: Award, rule: "Resmi kaynaktan doğrulanan sertifika 3–4 puan, doğrulanamayan 1 puan alır.", action: { label: "Sertifika ekle", href: "/profil?sertifika=1" } },
-  Referanslar: { icon: ShieldCheck, rule: "Amirin ya da hocan onaylarsa: kurumsal e-posta 5, kişisel e-posta 2 puan; yorum yazarsa +1.", action: { label: "Onay iste", href: "/profil?onay=1" } },
-  "Yol haritası": { icon: Map, rule: "AI yol haritandaki adımları tamamladıkça 1–2 puan kazanırsın.", action: { label: "Yol haritam", href: "/yol-haritasi" } },
+  Projeler: {
+    icon: FolderGit2,
+    rule: "100 üzerinden. AI kodu okuyup zorluğu sınıflandırır (Kolay 10, Orta 40, Zor 70); kalite en fazla 30: CI'da yeşil testler 12, açılan demo 8, anlamlı README 4, 10+ günde geliştirme 6. Kopya ve şablon kod puan almaz.",
+    action: { label: "Proje ekle", href: "/projeler?ekle=1" },
+  },
+  Yarışmalar: { icon: Trophy, rule: "Zorluğa göre en fazla Kolay 100, Orta 150, Zor 200. Takım şartnamenin ne kadarını karşıladıysa o kadar puan; %50'nin altı 0.", action: { label: "Yarışmalar", href: "/yarismalar" } },
+  "Akran puanı": { icon: Users, rule: "Yarışma bitince takım arkadaşların seni 1–5 yıldızla puanlar; her yarışmada ortalaman 30 üzerinden. Takımındaki yeni başlayanlardan 4+ yıldız alırsan +15 mentor puanı.", action: { label: "Yarışmalar", href: "/yarismalar" } },
+  Sertifikalar: { icon: Award, rule: "Resmi kaynaktan doğrulanan BTK Akademi 20, Credly 25; doğrulanamayan 5; isim uyuşmayan 0.", action: { label: "Sertifika ekle", href: "/profil?sertifika=1" } },
+  Referanslar: { icon: ShieldCheck, rule: "Amirin ya da hocan onaylarsa: kurumsal e-posta 30, kişisel e-posta 10; yorum yazarsa +5.", action: { label: "Onay iste", href: "/profil?onay=1" } },
+  "Yol haritası": { icon: Map, rule: "AI yol haritandaki adımları tamamladıkça adım başına 5–10 puan.", action: { label: "Yol haritam", href: "/yol-haritasi" } },
 };
 
 function Score() {
   const score = useMyScore();
   const history = useApp((s) => s.history);
-  const roadmap = useApp((s) => s.roadmap);
-  const done = roadmap?.steps.filter((s) => score.roadmapDone.includes(s.id)) ?? [];
-  const events = [
-    ...history,
-    ...done.map((s) => ({ id: `rm-${s.id}`, at: roadmap!.generatedAt, source: "Yol haritası" as const, label: s.title, points: s.points })),
-  ].sort((a, b) => b.at.localeCompare(a.at));
+  const season = useApp((s) => s.season);
+  const [view, setView] = useState<"sezon" | "tum">("sezon");
+  const parts = view === "sezon" ? score.parts : score.allParts;
+  const sum = view === "sezon" ? score.season : score.total;
+  const events = view === "sezon" && season ? history.filter((e) => e.seasonId === season.id) : history;
+  const left = season ? daysLeft(season.endsAt) : 0;
 
   return (
     <>
@@ -35,19 +42,34 @@ function Score() {
         eyebrow="Puanım"
         title="Puanın nereden"
         highlight="geliyor?"
-        subtitle="Hepsi kural tabanlı. Aynı iş her zaman aynı puanı alır; AI puan vermez."
+        subtitle="Hepsi kural tabanlı. AI sadece proje zorluğunu sınıflandırır; puanı kural tablosu verir."
         right={
           <div className="text-left sm:text-right">
-            <p className="text-6xl leading-none font-semibold text-cyan tabular-nums">
-              {score.total}
-            </p>
+            <p className="text-6xl leading-none font-semibold text-cyan tabular-nums">{score.season}</p>
+            <span className="mt-1 block text-xs text-on-navy-muted">
+              {season?.name ?? "Sezon"} puanı · tüm zamanlar {score.total}
+            </span>
             <span className="mt-3 inline-block rounded-full bg-lav px-3 py-1 text-xs font-semibold text-secondary-foreground">{levelLabel(score.level)}</span>
+            {season && <span className="mt-2 block text-xs text-on-navy-muted">Sezonun bitmesine {left} gün</span>}
           </div>
         }
       />
       <Container className="grid gap-8 lg:grid-cols-[1fr_360px]">
         <div className="grid content-start gap-4">
-          {score.parts.map((p) => {
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "sezon", label: "Bu sezon" },
+                { value: "tum", label: "Tüm zamanlar" },
+              ]}
+            />
+            <p className="text-sm text-muted-foreground">
+              {view === "sezon" ? "Lig sıran sadece bu sezonun puanıyla belirlenir." : "Kanıtların kalıcı; sadece lig puanı her sezon sıfırlanır."}
+            </p>
+          </div>
+          {parts.map((p) => {
             const info = INFO[p.source];
             const Icon = info.icon;
             return (
@@ -64,7 +86,7 @@ function Score() {
                         <span className="text-muted-foreground"> puan</span>
                       </span>
                     </div>
-                    <Progress value={score.total ? (p.points / score.total) * 100 : 0} className="mt-2" />
+                    <Progress value={sum > 0 ? Math.max(0, (p.points / sum) * 100) : 0} className="mt-2" />
                     <p className="mt-2 text-sm text-muted-foreground">{info.rule}</p>
                   </div>
                   <Link href={info.action.href} className={btn("outline", "sm", "self-start sm:self-center")}>
@@ -79,7 +101,7 @@ function Score() {
         <Card className="h-fit p-6">
           <h2 className="mb-4 text-lg font-semibold">Puan geçmişi</h2>
           {events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Henüz puan almadın. İlk projeni ekleyerek başla.</p>
+            <p className="text-sm text-muted-foreground">{view === "sezon" ? "Bu sezon henüz puan almadın. İlk projeni ekleyerek başla." : "Henüz puan almadın. İlk projeni ekleyerek başla."}</p>
           ) : (
             <ul className="divide-y">
               {events.map((e) => (
@@ -90,12 +112,17 @@ function Score() {
                       {e.source} · {fmtDate(e.at)}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-ok-bg px-2.5 py-1 text-xs font-semibold text-ok">+{e.points}</span>
+                  <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold", e.points >= 0 ? "bg-ok-bg text-ok" : "bg-destructive/10 text-destructive")}>
+                    {e.points >= 0 ? "+" : ""}
+                    {e.points}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
-          <p className="mt-5 border-t pt-4 text-xs text-muted-foreground">Puanın bir üst sınırı yok: ne kadar çok iş çıkarırsan o kadar yükselirsin. Çubuklar her kaynağın toplamdaki payını gösterir.</p>
+          <p className="mt-5 border-t pt-4 text-xs text-muted-foreground">
+            Puan, kanıt eklendiği ya da değiştiği sezona yazılır. Yeniden analizde ya da kaldırmada fark (+/−) o anki sezona yazılır. Üst sınır yok.
+          </p>
         </Card>
       </Container>
     </>

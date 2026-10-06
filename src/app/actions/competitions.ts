@@ -1,21 +1,24 @@
 "use server";
 
 import { z } from "zod";
-import { parseRepoUrl, peerPoints } from "@/lib/score";
+import { parseRepoUrl } from "@/lib/score";
 import { check, FIELD, run, text, UserError } from "@/lib/server/action";
 import { db } from "@/lib/server/admin";
 import { requireUser } from "@/lib/server/auth";
+import { blockedBetween } from "@/lib/server/blocks";
+import { endOfDay, requestPublicRun } from "@/lib/server/competition-flow";
+import { EvalError } from "@/lib/server/evaluation";
 import { loadMe, syncScore } from "@/lib/server/me";
-import { notify, scoreEvent } from "@/lib/server/notify";
-import { allow } from "@/lib/server/rate";
+import { notify } from "@/lib/server/notify";
+import { allow, allowKey } from "@/lib/server/rate";
 
 const CompId = z.string().regex(/^y-[0-9]{2,4}$/, "Geçersiz yarışma.");
 const TeamId = z.string().regex(/^t-[A-Za-z0-9-]{2,40}$/, "Geçersiz takım.");
 
 async function competition(id: string) {
-  const r = await db().from("competitions").select("id, code, status, apply_deadline, positions").eq("id", id).maybeSingle();
+  const r = await db().from("competitions").select("id, code, status, apply_deadline, end_date, positions, is_demo").eq("id", id).maybeSingle();
   if (!r.data) throw new UserError("Bu yarışma bulunamadı.");
-  return r.data as { id: string; code: string; status: string; apply_deadline: string; positions: { field: string }[] };
+  return r.data as { id: string; code: string; status: string; apply_deadline: string; end_date: string; positions: { field: string }[]; is_demo: boolean };
 }
 
 const ApplyInput = z.object({ competitionId: CompId, field: FIELD, note: text(300).optional() });
@@ -55,18 +58,35 @@ async function membership(teamId: string, userId: string) {
   return c;
 }
 
-const SubmitInput = z.object({ teamId: TeamId, repoUrl: z.string().trim().max(200) });
+const SubmitInput = z.object({
+  teamId: TeamId,
+  repoUrl: z.string().trim().max(200),
+  demoUrl: z
+    .string()
+    .trim()
+    .max(300, "Link çok uzun.")
+    .refine((v) => {
+      try {
+        return new URL(v).protocol === "https:";
+      } catch {
+        return false;
+      }
+    }, "Demo linki https:// ile başlamalı (ör. Vercel adresi)."),
+});
 
 export async function submitTeamRepo(input: z.input<typeof SubmitInput>) {
   return run(async () => {
     const user = await requireUser();
     const v = SubmitInput.parse(input);
     const c = await membership(v.teamId, user.id);
-    if (c.status !== "Devam ediyor") throw new UserError("Teslim sadece yarışma devam ederken yapılabilir.");
+    if (c.status !== "Devam ediyor" || endOfDay(c.end_date).getTime() < Date.now()) throw new UserError("Teslim sadece yarışma devam ederken yapılabilir.");
     const repo = parseRepoUrl(v.repoUrl);
     if (!repo) throw new UserError("Geçerli bir GitHub repo linki gir: github.com/kullanici/repo");
     check(
-      await db().from("teams").update({ repo_url: `https://github.com/${repo.owner}/${repo.repo}`, submitted_at: new Date().toISOString() }).eq("id", v.teamId),
+      await db()
+        .from("teams")
+        .update({ repo_url: `https://github.com/${repo.owner}/${repo.repo}`, demo_url: v.demoUrl, submitted_at: new Date().toISOString() })
+        .eq("id", v.teamId),
       "teslim",
     );
     const mates = (check(await db().from("team_members").select("user_id").eq("team_id", v.teamId).neq("user_id", user.id), "üyeler") as { user_id: string }[]).map((m) => m.user_id);
@@ -103,17 +123,27 @@ export async function ratePeers(input: z.input<typeof RateInput>) {
     check(ins, "akran puanı");
 
     for (const r of rows) {
-      const all = (check(await db().from("peer_ratings").select("competition_id, stars, from_user").eq("to_user", r.to_user), "akran") as {
-        competition_id: string;
-        stars: number;
-        from_user: string;
-      }[]).map((x) => ({ stars: x.stars, competitionId: x.competition_id, from: x.from_user }));
-      const gain = peerPoints(all) - peerPoints(all.filter((x) => !(x.from === user.id && x.competitionId === c.id)));
-      await scoreEvent(r.to_user, "Akran puanı", `${c.code} takım arkadaşından ${r.stars} yıldız`, gain);
       await syncScore(r.to_user);
       await notify(r.to_user, `${c.code} takım arkadaşın seni puanladı.`, `/yarismalar/${c.id}`);
     }
     return loadMe(user.id, user.email);
+  });
+}
+
+/** Açık testleri takımın demosuna karşı çalıştır (takım başına günde 3). Sonuç takım sayfasına gelir. */
+export async function runPublicTests(teamId: string) {
+  return run(async () => {
+    const user = await requireUser();
+    const id = TeamId.parse(teamId);
+    await membership(id, user.id);
+    if (!(await allowKey(id, "acik_test", 3, 24 * 60))) throw new UserError("Takımın bugünkü 3 deneme hakkını kullandı. Yarın tekrar dene.");
+    try {
+      await requestPublicRun(id);
+    } catch (e) {
+      if (e instanceof EvalError) throw new UserError(e.message);
+      throw e;
+    }
+    return true;
   });
 }
 
@@ -142,6 +172,7 @@ export async function sendMessage(input: z.input<typeof DirectMessage>) {
     const conv = await db().from("conversations").select("user_a, user_b").eq("id", v.conversationId).maybeSingle();
     const c = conv.data as { user_a: string; user_b: string } | null;
     if (!c || (c.user_a !== user.id && c.user_b !== user.id)) throw new UserError("Bu sohbete mesaj gönderemezsin.");
+    if (await blockedBetween(c.user_a, c.user_b)) throw new UserError("Bu kişiye mesaj gönderemezsin.");
     if (!(await allow(user.id, "message", 300, 1))) throw new UserError("Çok hızlı mesaj gönderiyorsun.");
     const row = check(await db().from("messages").insert({ conversation_id: v.conversationId, sender_id: user.id, text: v.text }).select("id, created_at").single(), "mesaj") as {
       id: number;

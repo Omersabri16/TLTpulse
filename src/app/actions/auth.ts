@@ -2,9 +2,11 @@
 
 import { z } from "zod";
 import { run, UserError } from "@/lib/server/action";
+import { db } from "@/lib/server/admin";
 import { currentUser, requireUser } from "@/lib/server/auth";
 import { EMPTY_ME, loadMe } from "@/lib/server/me";
 import { ensureProfile } from "@/lib/server/profile-init";
+import { allowKey, clientIp } from "@/lib/server/rate";
 import { supabaseServer } from "@/lib/supabase/server";
 
 const site = () => process.env.SITE_URL ?? "http://localhost:3000";
@@ -21,11 +23,13 @@ const RegisterInput = z.object({
     .refine((v) => v.split(/\s+/).length >= 2, "Adını ve soyadını yaz."),
   email: Email,
   password: Password,
+  kvkk: z.literal(true, { error: "Devam etmek için aydınlatma metnini okuyup onay vermelisin." }),
 });
 
 export async function register(input: z.input<typeof RegisterInput>) {
   return run(async () => {
     const { name, email, password } = RegisterInput.parse(input);
+    if (!(await allowKey(await clientIp(), "register", 5, 60))) throw new UserError("Bu bağlantıdan çok fazla kayıt denemesi oldu. Bir saat sonra tekrar dene.");
     const supabase = await supabaseServer();
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -41,6 +45,8 @@ export async function register(input: z.input<typeof RegisterInput>) {
     // Supabase, kayıtlı e-postayla yeniden kayıtta hata vermeden kimliksiz kullanıcı döndürür.
     if (!data.user || data.user.identities?.length === 0) throw new UserError("Bu e-postayla bir hesap var. Giriş yap.");
     await ensureProfile(data.user.id, name);
+    // KVKK: açık rıza zamanı (aydınlatma metni + yurt dışına aktarım).
+    await db().from("profiles").update({ kvkk_accepted_at: new Date().toISOString() }).eq("id", data.user.id);
     if (!data.session) return { needsConfirm: true as const, me: EMPTY_ME };
     return { needsConfirm: false as const, me: await loadMe(data.user.id, email) };
   });
@@ -51,6 +57,7 @@ const LoginInput = z.object({ email: Email, password: z.string().min(1, "Şifren
 export async function login(input: z.input<typeof LoginInput>) {
   return run(async () => {
     const { email, password } = LoginInput.parse(input);
+    if (!(await allowKey(email, "login", 10, 15))) throw new UserError("Bu hesapla çok fazla giriş denemesi oldu. 15 dakika sonra tekrar dene.");
     const supabase = await supabaseServer();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error || !data.user) {
@@ -96,7 +103,8 @@ export async function requestPasswordReset(input: z.input<typeof ResetInput>) {
   return run(async () => {
     const { email } = ResetInput.parse(input);
     const supabase = await supabaseServer();
-    // Hesap var mı yok mu belli etmemek için sonuç ne olursa olsun aynı cevap.
+    // Hesap var mı yok mu belli etmemek için sonuç ne olursa olsun aynı cevap; sınır aşılınca e-posta gitmez.
+    if (!(await allowKey(email, "reset", 3, 60))) return true;
     await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${site()}/auth/confirm?next=/sifre-yenile` });
     return true;
   });

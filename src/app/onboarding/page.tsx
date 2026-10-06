@@ -1,8 +1,11 @@
 "use client";
 
-import { Check, Database, Layout, Server, Smartphone, Workflow } from "lucide-react";
+import { Check, Database, FileUp, Layout, Server, Smartphone, Workflow } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { acceptKvkk } from "@/app/actions/account";
+import { CvUploadDialog } from "@/components/cv-upload-dialog";
+import { KvkkConsent } from "@/components/kvkk-consent";
 import { Container, PageHero, PageShell } from "@/components/page-shell";
 import { TagInput } from "@/components/tag-input";
 import { btn, inputClass } from "@/lib/btn";
@@ -22,6 +25,9 @@ const SKILLS: Record<Field, string[]> = {
 
 function Onboarding() {
   const profile = useApp((s) => s.profile)!;
+  const kvkkAccepted = useApp((s) => s.kvkkAccepted);
+  const [consent, setConsent] = useState(false);
+  const [cvOpen, setCvOpen] = useState(false);
   const act = useAct();
   const [busy, setBusy] = useState(false);
   const router = useRouter();
@@ -38,6 +44,10 @@ function Onboarding() {
   const canNext = step === 0 ? !!field : step === 1 ? !!school : true;
 
   const finish = async () => {
+    if (!kvkkAccepted) {
+      if (!consent) return setStep(0);
+      if (!(await act(acceptKvkk()))) return;
+    }
     setBusy(true);
     const ok = await act(
       saveProfile({
@@ -60,6 +70,36 @@ function Onboarding() {
     <>
       <PageHero eyebrow={`Adım ${step + 1} / 3`} title="Profilini" highlight="kur." subtitle="Üç kısa adım. Sonra istediğin zaman değiştirebilirsin." />
       <Container className="max-w-3xl">
+        {!kvkkAccepted && (
+          <div className="mb-6 rounded-3xl border bg-card p-5">
+            <KvkkConsent checked={consent} onChange={setConsent} />
+          </div>
+        )}
+        <div className="mb-6 flex flex-col gap-3 rounded-3xl bg-navy p-5 text-on-navy sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <b className="block">CV&apos;n var mı?</b>
+            <span className="text-sm text-on-navy-muted">Yükle, AI becerilerini, deneyimlerini ve eğitimini çıkarsın. Dosyan saklanmaz.</span>
+          </div>
+          <button type="button" disabled={!kvkkAccepted && !consent} onClick={async () => {
+              if (!kvkkAccepted && !(await act(acceptKvkk()))) return;
+              setCvOpen(true);
+            }} className={btn("primary", "md", "shrink-0")}>
+            <FileUp /> CV&apos;mi yükle
+          </button>
+        </div>
+        <CvUploadDialog
+          open={cvOpen}
+          onOpenChange={setCvOpen}
+          onApplied={(me) => {
+            if (!me.profile) return;
+            setSkills((cur) => [...new Set([...cur, ...me.profile!.skills.map((x) => x.name)])]);
+            const e = me.profile.education[0];
+            if (e && !school) {
+              setSchool(e.school);
+              setDepartment(e.department);
+            }
+          }}
+        />
         <ol className="mb-8 flex gap-2">
           {steps.map((s, i) => (
             <li key={s} className={cn("flex flex-1 items-center gap-2 rounded-full px-4 py-2 text-xs font-medium", i === step ? "bg-primary text-primary-foreground" : i < step ? "bg-ok-bg text-ok" : "bg-card text-muted-foreground border")}>

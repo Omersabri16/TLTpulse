@@ -44,7 +44,7 @@ function Verify({ kod, data }: { kod: string; data: ProfileData | null }) {
           </div>
           <div className="flex items-center gap-2">
             <Pill tone="lav">{levelLabel(data.level)}</Pill>
-            <Pill tone="ok">{data.score} puan</Pill>
+            <Pill tone="ok">{data.total} puan</Pill>
           </div>
         </Card>
 

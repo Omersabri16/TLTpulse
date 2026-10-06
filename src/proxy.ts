@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Giriş gerektiren sayfalar. Lig, herkese açık profil, CV, doğrulama ve onay sayfaları açık (kararlar.md).
-const PROTECTED = ["/profil", "/projeler", "/puan", "/yarismalar", "/takim", "/yol-haritasi", "/mesajlar", "/onboarding"];
+const PROTECTED = ["/profil", "/projeler", "/puan", "/yarismalar", "/takim", "/yol-haritasi", "/mesajlar", "/onboarding", "/hesap", "/yonetim"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
