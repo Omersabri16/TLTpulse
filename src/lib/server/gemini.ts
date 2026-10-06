@@ -52,7 +52,21 @@ function profileBlock(ctx: RoadmapContext, target: Field) {
   ].join("\n");
 }
 
-const MODELS = () => [...new Set([process.env.GEMINI_MODEL || "gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest"])];
+// Sıra: ana model, sonra aynı ailenin diğer sürümleri, en son hafif (lite) modeller. Ücretsiz katmanda büyük modeller
+// sık sık "yoğun" (503) dönüyor; hafif modeller genelde açık. (2.5 ailesi yeni hesaplara kapalı.)
+const MODELS = () => [
+  ...new Set([
+    process.env.GEMINI_MODEL || "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-flash-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-lite-latest",
+  ]),
+];
+const RETRYABLE = /"code":\s*(503|429|404|500)|UNAVAILABLE|RESOURCE_EXHAUSTED|NOT_FOUND|INTERNAL|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|aborted|timeout/i;
 
 /**
  * Ücretsiz katman günde ~1500 istek ve bütün özellikler aynı kotayı paylaşıyor. Günlük toplam bu sınırlara gelince
@@ -79,14 +93,20 @@ export async function generate(contents: ContentListUnion, config: () => Generat
   if (!(await takeQuota(kind))) throw new QuotaError();
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   let last: unknown;
-  for (const model of MODELS()) {
-    try {
-      return await ai.models.generateContent({ model, contents, config: config() });
-    } catch (e) {
-      last = e;
-      // Yoğunluk/kota/model yok ya da geçici ağ hatası: sıradaki modeli dene.
-      if (!/"code":\s*(503|429|404)|UNAVAILABLE|RESOURCE_EXHAUSTED|NOT_FOUND|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/.test(e instanceof Error ? e.message : "")) throw e;
+  // Bütün modeller yoğunsa kısa bir aradan sonra bir tur daha; toplam süre sınırlı (sunucu fonksiyonu uzun sürmesin).
+  const deadline = Date.now() + 100_000;
+  for (let round = 0; round < 2; round++) {
+    for (const model of MODELS()) {
+      if (Date.now() > deadline) throw last ?? new Error("Gemini zaman aşımı");
+      try {
+        return await ai.models.generateContent({ model, contents, config: config() });
+      } catch (e) {
+        last = e;
+        // Yoğunluk/kota/model yok ya da geçici ağ hatası: sıradaki modeli dene.
+        if (!RETRYABLE.test(e instanceof Error ? e.message : String(e))) throw e;
+      }
     }
+    await new Promise((r) => setTimeout(r, 3000));
   }
   throw last;
 }

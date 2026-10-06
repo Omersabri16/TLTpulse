@@ -63,7 +63,7 @@ function ProjectDetail({ project, onClose }: { project: Project | null; onClose:
             </div>
           </div>
         )}
-        <AnalysisView analysis={a} repo={repo} sha={a.commitSha} />
+        <AnalysisView analysis={a} repo={repo} sha={a.commitSha} pending={pending} />
         <dl className="grid grid-cols-2 gap-y-2 text-sm">
           <dt className="text-muted-foreground">Nasıl yapıldı</dt>
           <dd className="text-right font-semibold">{project.role}</dd>

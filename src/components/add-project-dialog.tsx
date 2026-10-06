@@ -9,7 +9,7 @@ import { Field, Modal } from "@/components/modal";
 import { Pill } from "@/components/page-shell";
 import { btn, inputClass } from "@/lib/btn";
 import { celebrateIfAboveLine } from "@/lib/celebrate";
-import { DIFFICULTY_POINTS, MIN_COMMIT_DAYS, parseRepoUrl, QUALITY_RULES } from "@/lib/score";
+import { DIFFICULTY_POINTS, IMPORTED_RATIO, MIN_COMMIT_DAYS, parseRepoUrl, QUALITY_RULES } from "@/lib/score";
 import { isHttpUrl } from "@/lib/safe";
 import { useAct, useApp, useMyScore } from "@/lib/store";
 import type { ProjectAnalysis } from "@/lib/types";
@@ -21,7 +21,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const REJECT_TITLE: Record<string, string> = { kopya: "Kopya kod", şablon: "Çoğu şablon dosyası", fork: "Fork", yazarlık: "Commit yazarlığı yetersiz", erişim: "Repoya ulaşılamadı" };
 
 /** Analiz sonucunun ortak gösterimi (ekleme penceresi ve proje detayı). */
-export function AnalysisView({ analysis, repo, sha }: { analysis: ProjectAnalysis; repo: string; sha?: string }) {
+export function AnalysisView({ analysis, repo, sha, pending = false }: { analysis: ProjectAnalysis; repo: string; sha?: string; pending?: boolean }) {
   const a = analysis;
   const fileUrl = (f: string) => `https://github.com/${repo}/blob/${sha ?? "HEAD"}/${f.split("/").map(encodeURIComponent).join("/")}`;
   const checks = [
@@ -30,8 +30,19 @@ export function AnalysisView({ analysis, repo, sha }: { analysis: ProjectAnalysi
     ["Anlamlı README", a.checks.readme, QUALITY_RULES.readme],
     [`${MIN_COMMIT_DAYS}+ farklı günde commit (${a.commitDays} gün)`, a.checks.days, QUALITY_RULES.days],
   ] as const;
+  const imported = a.importedRatio > IMPORTED_RATIO;
   return (
     <div className="grid gap-5">
+      {imported && (
+        <div className="flex gap-3 rounded-2xl bg-warn-bg p-4 text-sm text-warn">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          <p>
+            <b className="block">Kodun %{Math.round(a.importedRatio * 100)}&apos;i ilk commit&apos;le gelmiş ve sonra değişmemiş.</b>
+            Kural gereği puan, sonradan yazılan kısmın oranıyla çarpılır (şu an × {(1 - a.importedRatio).toFixed(2)}). Projeyi küçük commit&apos;lerle geliştirmeye devam edip
+            &quot;Yeniden analiz et&quot; dersen puan artar.
+          </p>
+        </div>
+      )}
       {a.reasons.length > 0 && (
         <div>
           <h3 className="mb-2 text-sm font-semibold">AI neden {a.difficulty.toLowerCase()} dedi?</h3>
@@ -51,7 +62,9 @@ export function AnalysisView({ analysis, repo, sha }: { analysis: ProjectAnalysi
         </div>
       )}
       <div>
-        <h3 className="mb-2 text-sm font-semibold">Kalite {a.difficulty === "Kolay" ? "(Kolay projede puana eklenmez)" : `(+${a.qualityPoints} / 30)`}</h3>
+        <h3 className="mb-2 text-sm font-semibold">
+          Kalite {pending ? "(Orta ve Zor projede puana eklenir, en fazla 30)" : a.difficulty === "Kolay" ? "(Kolay projede puana eklenmez)" : `(+${a.qualityPoints} / 30)`}
+        </h3>
         <ul className="grid gap-2 sm:grid-cols-2">
           {checks.map(([k, v, pts]) => (
             <li key={k} className={cn("flex items-center gap-2 text-sm", !v && "text-muted-foreground")}>
@@ -258,7 +271,7 @@ function AddProjectBody({ onOpenChange }: { onOpenChange: (o: boolean) => void }
           {result.pending && (
             <p className="text-sm text-muted-foreground">AI zorluk sınıflandırması şu an yapılamadı. Projeyi ekleyebilirsin; analiz bitince puanı yazılır ve bildirim gelir.</p>
           )}
-          <AnalysisView analysis={result.analysis} repo={result.repo} sha={result.analysis.commitSha} />
+          <AnalysisView analysis={result.analysis} repo={result.repo} sha={result.analysis.commitSha} pending={result.pending} />
           <div className="flex flex-wrap gap-1.5">
             {result.techs.map((t) => (
               <Pill key={t}>{t}</Pill>
