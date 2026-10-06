@@ -8,7 +8,7 @@ import { UserAvatar } from "@/components/brand";
 import { Modal } from "@/components/modal";
 import { Container, PageHero, Segmented } from "@/components/page-shell";
 import { btn, inputClass } from "@/lib/btn";
-import { MIN_SEASON_POINTS, PROMOTION_TOP, type LeagueRow } from "@/lib/score";
+import { MIN_SEASON_POINTS, promotionCount, relegationCount, type LeagueRow } from "@/lib/score";
 import { useApp, useMyScore } from "@/lib/store";
 import type { Level, SeasonInfo } from "@/lib/types";
 import { daysLeft } from "@/lib/time";
@@ -21,9 +21,9 @@ function Line({ kind, level }: { kind: "up" | "down"; level: Level }) {
       {up ? <ChevronsUp className="size-4" /> : <ChevronsDown className="size-4" />}
       {up
         ? level === "Kıdemli"
-          ? `Sezon şampiyonları: ilk ${PROMOTION_TOP} (en az ${MIN_SEASON_POINTS} puan)`
-          : `Yükselme çizgisi: ilk ${PROMOTION_TOP} (en az ${MIN_SEASON_POINTS} puan) sezon sonunda üst lige çıkar`
-        : `Düşme çizgisi: son ${PROMOTION_TOP} (${MIN_SEASON_POINTS} puanın altında) bir alt lige düşer`}
+          ? `Sezon şampiyonları: ilk %20 (en az ${MIN_SEASON_POINTS} puan)`
+          : `Yükselme çizgisi: ilk %20 (en az ${MIN_SEASON_POINTS} puan) sezon sonunda üst lige çıkar`
+        : `Düşme çizgisi: son %10 (${MIN_SEASON_POINTS} puanın altında) bir alt lige düşer`}
     </li>
   );
 }
@@ -49,10 +49,10 @@ export function League({ all, season }: { all: LeagueRow[]; season: SeasonInfo |
       .map((r) => (r.username === mine ? { ...r, me: true } : r))
       .map((r, i) => ({ ...r, rank: i + 1 }));
     const n = ranked.length;
-    const up = ranked.filter((r, i) => i < PROMOTION_TOP && r.score >= MIN_SEASON_POINTS).length;
+    const up = ranked.filter((r, i) => i < promotionCount(n) && r.score >= MIN_SEASON_POINTS).length;
     let down = -1;
-    if (level !== "Yeni başlayan") {
-      const i = ranked.findIndex((r, j) => j >= Math.max(up, n - PROMOTION_TOP) && r.score < MIN_SEASON_POINTS);
+    if (level !== "Yeni başlayan" && relegationCount(n) > 0) {
+      const i = ranked.findIndex((r, j) => j >= Math.max(up, n - relegationCount(n)) && r.score < MIN_SEASON_POINTS);
       down = i;
     }
     const t = q.toLocaleLowerCase("tr");
@@ -170,8 +170,8 @@ export function League({ all, season }: { all: LeagueRow[]; season: SeasonInfo |
           </ul>
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          Eşit puanda o puana önce ulaşan öne geçer. Sezon sonunda her ligin ilk {PROMOTION_TOP}&apos;si (en az {MIN_SEASON_POINTS} puanla) bir üst lige çıkar; Orta ve Kıdemli&apos;nin son{" "}
-          {PROMOTION_TOP}&apos;si ({MIN_SEASON_POINTS} puanın altındaysa) düşer.
+          Eşit puanda o puana önce ulaşan öne geçer. Sezon sonunda her ligin ilk %20&apos;si (en az {MIN_SEASON_POINTS} puanla) bir üst lige çıkar; Orta ve Kıdemli&apos;nin son
+          %10&apos;u ({MIN_SEASON_POINTS} puanın altındaysa) düşer.
         </p>
       </Container>
 

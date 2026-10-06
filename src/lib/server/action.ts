@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import type { ActionResult } from "@/lib/types";
+import { FIELDS, type ActionResult, type Field } from "@/lib/types";
 import { AuthError } from "./auth";
 
 /** Kullanıcıya aynen gösterilecek hata. Diğer hatalar genel mesaja çevrilir (iç ayrıntı sızmaz). */
@@ -41,4 +41,4 @@ export const url = z
       return false;
     }
   }, "Link https:// ile başlamalı.");
-export const FIELD = z.enum(["Frontend", "Backend", "Veritabanı", "Mobil", "DevOps"], { error: "Geçerli bir alan seç." });
+export const FIELD = z.enum(FIELDS as [Field, ...Field[]], { error: "Geçerli bir alan seç." });

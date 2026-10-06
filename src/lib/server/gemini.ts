@@ -54,6 +54,7 @@ function profileBlock(ctx: RoadmapContext, target: Field) {
 
 // Sıra: ana model, sonra aynı ailenin diğer sürümleri, en son hafif (lite) modeller. Ücretsiz katmanda büyük modeller
 // sık sık "yoğun" (503) dönüyor; hafif modeller genelde açık. (2.5 ailesi yeni hesaplara kapalı.)
+// Ücretsiz katmanda kota model başına: gemini-3.8-flash günde sadece 20 istek, dolunca 429 → sıradaki model.
 const MODELS = () => [
   ...new Set([
     process.env.GEMINI_MODEL || "gemini-3.8-flash",
@@ -87,6 +88,15 @@ async function takeQuota(kind: GeminiKind) {
   return r.error ? true : r.data === true;
 }
 
+function parsesAsJson(text: string | undefined) {
+  try {
+    JSON.parse(text ?? "");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Gemini çağrısı; yoğunluk ya da kota hatasında sıradaki modele geçer. Anahtar yoksa null, günlük bütçe dolduysa QuotaError. */
 export async function generate(contents: ContentListUnion, config: () => GenerateContentConfig, kind: GeminiKind) {
   if (!process.env.GEMINI_API_KEY) return null;
@@ -99,7 +109,14 @@ export async function generate(contents: ContentListUnion, config: () => Generat
     for (const model of MODELS()) {
       if (Date.now() > deadline) throw last ?? new Error("Gemini zaman aşımı");
       try {
-        return await ai.models.generateContent({ model, contents, config: config() });
+        const cfg = config();
+        const res = await ai.models.generateContent({ model, contents, config: cfg });
+        // Düşünme token'ları çıktı sınırını yiyince JSON yarım kalabiliyor: o zaman da sıradaki model.
+        if (cfg.responseMimeType === "application/json" && !parsesAsJson(res.text)) {
+          last = new Error(`${model}: yarım JSON (${res.candidates?.[0]?.finishReason ?? "?"})`);
+          continue;
+        }
+        return res;
       } catch (e) {
         last = e;
         // Yoğunluk/kota/model yok ya da geçici ağ hatası: sıradaki modeli dene.

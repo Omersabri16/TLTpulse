@@ -64,57 +64,59 @@ const U = (username: string, name: string, school: string, city: string, field: 
 });
 
 export const USERS: SeedUser[] = [
-  // Kıdemli (8): ilk 20'si (100+) sezon şampiyonu adayı; 100'ün altındaki düşme bölgesinde.
+  // Kıdemli (10): ilk %20'si (2 kişi, 100+) sezon şampiyonu; son %10'u (1 kişi, 100'ün altında) düşer.
   U("burakatan", "Burak Tan", "Sabancı Üniversitesi", "İstanbul", "Backend", "Kıdemli", 420, 520, "Ödeme sistemlerinde 5 yıl.", ["Java", "Kotlin", "Kafka", "PostgreSQL"], ["Fintek", "Mentorluk"]),
   U("zeynepacar", "Zeynep Acar", "Bilkent Üniversitesi", "Ankara", "Frontend", "Kıdemli", 380, 470, "Performans odaklı web arayüzleri.", ["React", "Next.js", "Web Vitals"], ["Performans", "Mentorluk"]),
   U("canerer", "Can Eren", "ODTÜ", "Ankara", "DevOps", "Kıdemli", 340, 440, "Kubernetes ve gözlemlenebilirlik.", ["Kubernetes", "Prometheus", "Terraform"], ["SRE"]),
   U("mehmetsahin", "Mehmet Şahin", "Ege Üniversitesi", "İzmir", "Frontend", "Kıdemli", 300, 420, "8 yıllık frontend geliştirici, yarışmalarda mentor.", ["Vue", "React", "TypeScript"], ["Mentorluk", "UI"]),
   U("elifkoc", "Elif Koç", "Hacettepe Üniversitesi", "Ankara", "Backend", "Kıdemli", 262, 400, "Dağıtık önbellek ve kuyruk sistemleri.", ["Go", "Redis", "NATS"], ["Dağıtık sistemler"]),
-  U("onurbal", "Onur Bal", "İTÜ", "İstanbul", "Mobil", "Kıdemli", 210, 380, "Flutter ve yerel modüller.", ["Flutter", "Kotlin", "Swift"], ["Mobil", "Oyun"]),
+  U("onurbal", "Onur Bal", "İTÜ", "İstanbul", "Cross-Platform", "Kıdemli", 210, 380, "Flutter ve yerel modüller.", ["Flutter", "Kotlin", "Swift"], ["Mobil", "Oyun"]),
   U("gizemyurt", "Gizem Yurt", "Dokuz Eylül Üniversitesi", "İzmir", "Veritabanı", "Kıdemli", 150, 360, "Veri ambarı ve sorgu optimizasyonu.", ["PostgreSQL", "dbt", "Python"], ["Veri"]),
-  U("hakanarslan", "Hakan Arslan", "Gazi Üniversitesi", "Ankara", "DevOps", "Kıdemli", 60, 350, "Bulut altyapısı ve maliyet optimizasyonu.", ["AWS", "Terraform", "Docker"], ["Bulut"]),
+  U("sinanozturk", "Sinan Öztürk", "Yeditepe Üniversitesi", "İstanbul", "Test / QA", "Kıdemli", 130, 330, "Test otomasyonu ve kalite süreçleri.", ["Playwright", "Selenium", "Jest"], ["Kalite", "Mentorluk"]),
+  U("leylaari", "Leyla Arı", "TOBB ETÜ", "Ankara", "Siber Güvenlik", "Kıdemli", 104, 320, "Sızma testleri ve güvenli kod incelemesi.", ["OWASP", "Burp Suite", "Python"], ["Güvenlik", "CTF"]),
+  U("hakanarslan", "Hakan Arslan", "Gazi Üniversitesi", "Ankara", "Bulut Bilişim", "Kıdemli", 60, 350, "Bulut altyapısı ve maliyet optimizasyonu.", ["AWS", "Terraform", "Docker"], ["Bulut"]),
 
-  // Orta (24 + Deniz): Deniz 130 puanla 21.; ilk 20'nin en sonu 138.
-  U("eceyilmaz", "Ece Yılmaz", "Boğaziçi Üniversitesi", "İstanbul", "Frontend", "Orta", 360, 210, "Erişilebilir arayüzler ve tasarım sistemleri üzerine çalışıyorum.", ["React", "TypeScript", "Tailwind", "Figma"], ["Erişilebilirlik", "Tasarım sistemleri"]),
-  U("ardademir", "Arda Demir", "İstanbul Teknik Üniversitesi", "İstanbul", "Backend", "Orta", 322, 190, "Dağıtık sistemler ve Go ile servis yazmayı seviyorum.", ["Go", "PostgreSQL", "gRPC", "Docker"], ["Dağıtık sistemler", "Açık kaynak"]),
-  U("selinaksoy", "Selin Aksoy", "Yıldız Teknik Üniversitesi", "İstanbul", "Mobil", "Orta", 300, 180, "Flutter ile mobil uygulamalar geliştiriyorum.", ["Flutter", "Dart", "Firebase"], ["Mobil", "Oyun"]),
-  U("keremoral", "Kerem Oral", "ODTÜ", "Ankara", "Veritabanı", "Orta", 284, 170, "Sorgu optimizasyonu ve veri modelleme.", ["PostgreSQL", "SQL", "Python"], ["Veri", "Performans"]),
-  U("minakaya", "Mina Kaya", "Koç Üniversitesi", "İstanbul", "DevOps", "Orta", 270, 160, "CI/CD ve bulut altyapısı.", ["Docker", "Kubernetes", "GitHub Actions"], ["Bulut", "Otomasyon"]),
-  U("emrecelik", "Emre Çelik", "Uludağ Üniversitesi", "Bursa", "DevOps", "Orta", 256, 150, "Linux ve otomasyon.", ["Linux", "Ansible", "Docker"], ["Altyapı"]),
-  U("berkaygul", "Berkay Gül", "Anadolu Üniversitesi", "Eskişehir", "Backend", "Orta", 240, 150, "Node.js ile gerçek zamanlı servisler.", ["Node.js", "Socket.IO", "Redis"], ["Gerçek zamanlı sistemler"]),
-  U("nazlicetin", "Nazlı Çetin", "Ankara Üniversitesi", "Ankara", "Frontend", "Orta", 228, 140, "Svelte ve veri görselleştirme.", ["Svelte", "D3", "TypeScript"], ["Veri görselleştirme"]),
-  U("tolgaozer", "Tolga Özer", "Pamukkale Üniversitesi", "Denizli", "Mobil", "Orta", 216, 140, "Android ve çevrimdışı senkronizasyon.", ["Kotlin", "Room", "Android"], ["Mobil"]),
-  U("ilaydasen", "İlayda Şen", "Marmara Üniversitesi", "İstanbul", "Veritabanı", "Orta", 204, 130, "MongoDB ve veri modelleme.", ["MongoDB", "Node.js", "SQL"], ["Veri"]),
-  U("serkanbulut", "Serkan Bulut", "Erciyes Üniversitesi", "Kayseri", "Backend", "Orta", 196, 130, "Java Spring ile mikroservisler.", ["Java", "Spring", "PostgreSQL"], ["Mikroservis"]),
-  U("pelinakin", "Pelin Akın", "Akdeniz Üniversitesi", "Antalya", "Frontend", "Orta", 188, 120, "React Native ve web.", ["React", "React Native", "TypeScript"], ["Mobil", "UI"]),
-  U("ugurkaya", "Uğur Kaya", "Sakarya Üniversitesi", "Sakarya", "DevOps", "Orta", 180, 120, "GitOps ve izleme.", ["ArgoCD", "Kubernetes", "Grafana"], ["SRE"]),
-  U("melisdag", "Melis Dağ", "Trakya Üniversitesi", "Edirne", "Backend", "Orta", 172, 120, "Python ve FastAPI.", ["Python", "FastAPI", "PostgreSQL"], ["Yapay zeka"]),
-  U("baransoylu", "Baran Soylu", "Fırat Üniversitesi", "Elazığ", "Frontend", "Orta", 166, 110, "Angular ve kurumsal arayüzler.", ["Angular", "TypeScript", "RxJS"], ["Kurumsal yazılım"]),
-  U("ezgitas", "Ezgi Taş", "Karadeniz Teknik Üniversitesi", "Trabzon", "Veritabanı", "Orta", 160, 110, "Zaman serisi verileri.", ["TimescaleDB", "SQL", "Go"], ["IoT"]),
-  U("kaanyildirim", "Kaan Yıldırım", "Çukurova Üniversitesi", "Adana", "Mobil", "Orta", 152, 110, "Swift ve SwiftUI.", ["Swift", "SwiftUI", "Firebase"], ["Mobil"]),
-  U("ceren", "Ceren Uysal", "Kocaeli Üniversitesi", "Kocaeli", "Backend", "Orta", 146, 104, "Rust ile CLI araçları.", ["Rust", "Tokio", "SQLite"], ["Açık kaynak"]),
-  U("alpergun", "Alper Gün", "Selçuk Üniversitesi", "Konya", "Frontend", "Orta", 142, 104, "Vue ve Nuxt.", ["Vue", "Nuxt", "Tailwind"], ["Web"]),
-  U("sudeerkan", "Sude Erkan", "Atatürk Üniversitesi", "Erzurum", "DevOps", "Orta", 138, 104, "Docker ve CI şablonları.", ["Docker", "GitHub Actions", "Bash"], ["Otomasyon"]),
-  U("yusufkara", "Yusuf Kara", "Ondokuz Mayıs Üniversitesi", "Samsun", "Backend", "Orta", 120, 104, "PHP ve Laravel.", ["PHP", "Laravel", "MySQL"], ["Web"]),
+  // Orta (24 + Deniz = 25): ilk %20 = 5 kişi yükselir, 5. sıradaki 138; Deniz 130 puanla 6. (çizginin hemen altında). Son %10 = 2 kişi.
+  U("eceyilmaz", "Ece Yılmaz", "Boğaziçi Üniversitesi", "İstanbul", "Frontend", "Orta", 196, 210, "Erişilebilir arayüzler ve tasarım sistemleri üzerine çalışıyorum.", ["React", "TypeScript", "Tailwind", "Figma"], ["Erişilebilirlik", "Tasarım sistemleri"]),
+  U("ardademir", "Arda Demir", "İstanbul Teknik Üniversitesi", "İstanbul", "Backend", "Orta", 172, 190, "Dağıtık sistemler ve Go ile servis yazmayı seviyorum.", ["Go", "PostgreSQL", "gRPC", "Docker"], ["Dağıtık sistemler", "Açık kaynak"]),
+  U("selinaksoy", "Selin Aksoy", "Yıldız Teknik Üniversitesi", "İstanbul", "Cross-Platform", "Orta", 160, 180, "Flutter ile mobil uygulamalar geliştiriyorum.", ["Flutter", "Dart", "Firebase"], ["Mobil", "Oyun"]),
+  U("keremoral", "Kerem Oral", "ODTÜ", "Ankara", "Veritabanı", "Orta", 150, 170, "Sorgu optimizasyonu ve veri modelleme.", ["PostgreSQL", "SQL", "Python"], ["Veri", "Performans"]),
+  U("minakaya", "Mina Kaya", "Koç Üniversitesi", "İstanbul", "DevOps", "Orta", 138, 160, "CI/CD ve bulut altyapısı.", ["Docker", "Kubernetes", "GitHub Actions"], ["Bulut", "Otomasyon"]),
+  U("emrecelik", "Emre Çelik", "Uludağ Üniversitesi", "Bursa", "DevOps", "Orta", 128, 150, "Linux ve otomasyon.", ["Linux", "Ansible", "Docker"], ["Altyapı"]),
+  U("berkaygul", "Berkay Gül", "Anadolu Üniversitesi", "Eskişehir", "Backend", "Orta", 126, 150, "Node.js ile gerçek zamanlı servisler.", ["Node.js", "Socket.IO", "Redis"], ["Gerçek zamanlı sistemler"]),
+  U("nazlicetin", "Nazlı Çetin", "Ankara Üniversitesi", "Ankara", "Frontend", "Orta", 124, 140, "Svelte ve veri görselleştirme.", ["Svelte", "D3", "TypeScript"], ["Veri görselleştirme"]),
+  U("tolgaozer", "Tolga Özer", "Pamukkale Üniversitesi", "Denizli", "Android", "Orta", 122, 140, "Android ve çevrimdışı senkronizasyon.", ["Kotlin", "Room", "Android"], ["Mobil"]),
+  U("ilaydasen", "İlayda Şen", "Marmara Üniversitesi", "İstanbul", "Veritabanı", "Orta", 120, 130, "MongoDB ve veri modelleme.", ["MongoDB", "Node.js", "SQL"], ["Veri"]),
+  U("serkanbulut", "Serkan Bulut", "Erciyes Üniversitesi", "Kayseri", "Backend", "Orta", 118, 130, "Java Spring ile mikroservisler.", ["Java", "Spring", "PostgreSQL"], ["Mikroservis"]),
+  U("pelinakin", "Pelin Akın", "Akdeniz Üniversitesi", "Antalya", "Frontend", "Orta", 116, 120, "React Native ve web.", ["React", "React Native", "TypeScript"], ["Mobil", "UI"]),
+  U("ugurkaya", "Uğur Kaya", "Sakarya Üniversitesi", "Sakarya", "DevOps", "Orta", 114, 120, "GitOps ve izleme.", ["ArgoCD", "Kubernetes", "Grafana"], ["SRE"]),
+  U("melisdag", "Melis Dağ", "Trakya Üniversitesi", "Edirne", "Yapay Zeka", "Orta", 112, 120, "Python ile NLP ve sınıflandırma modelleri.", ["Python", "PyTorch", "FastAPI"], ["Yapay zeka"]),
+  U("baransoylu", "Baran Soylu", "Fırat Üniversitesi", "Elazığ", "Frontend", "Orta", 110, 110, "Angular ve kurumsal arayüzler.", ["Angular", "TypeScript", "RxJS"], ["Kurumsal yazılım"]),
+  U("ezgitas", "Ezgi Taş", "Karadeniz Teknik Üniversitesi", "Trabzon", "Gömülü / IoT", "Orta", 108, 110, "Sensör verileri ve zaman serileri.", ["TimescaleDB", "SQL", "Go"], ["IoT"]),
+  U("kaanyildirim", "Kaan Yıldırım", "Çukurova Üniversitesi", "Adana", "iOS", "Orta", 106, 110, "Swift ve SwiftUI.", ["Swift", "SwiftUI", "Firebase"], ["Mobil"]),
+  U("ceren", "Ceren Uysal", "Kocaeli Üniversitesi", "Kocaeli", "Backend", "Orta", 104, 104, "Rust ile CLI araçları.", ["Rust", "Tokio", "SQLite"], ["Açık kaynak"]),
+  U("alpergun", "Alper Gün", "Selçuk Üniversitesi", "Konya", "Full Stack", "Orta", 102, 104, "Vue, Nuxt ve Node.js.", ["Vue", "Nuxt", "Tailwind"], ["Web"]),
+  U("sudeerkan", "Sude Erkan", "Atatürk Üniversitesi", "Erzurum", "DevOps", "Orta", 100, 104, "Docker ve CI şablonları.", ["Docker", "GitHub Actions", "Bash"], ["Otomasyon"]),
+  U("yusufkara", "Yusuf Kara", "Ondokuz Mayıs Üniversitesi", "Samsun", "Backend", "Orta", 98, 104, "PHP ve Laravel.", ["PHP", "Laravel", "MySQL"], ["Web"]),
   U("irempolat", "İrem Polat", "Mersin Üniversitesi", "Mersin", "Frontend", "Orta", 94, 104, "Arayüz animasyonları.", ["React", "Framer Motion"], ["UI"]),
-  U("cagrituna", "Çağrı Tuna", "Bursa Teknik Üniversitesi", "Bursa", "Mobil", "Orta", 50, 104, "Flutter ile ilk uygulamalarım.", ["Flutter", "Dart"], ["Mobil"]),
+  U("cagrituna", "Çağrı Tuna", "Bursa Teknik Üniversitesi", "Bursa", "Cross-Platform", "Orta", 50, 104, "Flutter ile ilk uygulamalarım.", ["Flutter", "Dart"], ["Mobil"]),
   U("deryaak", "Derya Ak", "Kırıkkale Üniversitesi", "Kırıkkale", "Veritabanı", "Orta", 0, 104, "SQL Server ve raporlama.", ["SQL Server", "T-SQL"], ["Veri"]),
 
-  // Yeni başlayan (15): Ayşe 96 puanla çizginin hemen altında.
+  // Yeni başlayan (15): ilk %20 = 3 kişi yükselir; Ayşe 96 puanla 100 sınırının altında.
   U("aysayildiz", "Ayşe Yıldız", "Cumhuriyet Üniversitesi", "Sivas", "Veritabanı", "Yeni başlayan", 96, 60, "Bilgisayar mühendisliği 3. sınıf, veritabanına meraklıyım.", ["SQL", "MySQL", "Python"], ["Veri", "Eğitim"]),
   U("alidemirci", "Ali Demirci", "Ege Üniversitesi", "İzmir", "Frontend", "Yeni başlayan", 104, 40, "Yeni başladım, her gün kod yazıyorum.", ["HTML", "CSS", "JavaScript"], ["Web"]),
-  U("defneucar", "Defne Uçar", "Marmara Üniversitesi", "İstanbul", "Mobil", "Yeni başlayan", 120, 50, "Kotlin öğreniyorum.", ["Kotlin", "Android"], ["Mobil"]),
+  U("defneucar", "Defne Uçar", "Marmara Üniversitesi", "İstanbul", "Android", "Yeni başlayan", 120, 50, "Kotlin öğreniyorum.", ["Kotlin", "Android"], ["Mobil"]),
   U("mertaydin", "Mert Aydın", "Gazi Üniversitesi", "Ankara", "Backend", "Yeni başlayan", 140, 60, "Node.js ile ilk API'lerimi yazıyorum.", ["Node.js", "Express"], ["Backend"]),
   U("zehrakurt", "Zehra Kurt", "Harran Üniversitesi", "Şanlıurfa", "Frontend", "Yeni başlayan", 260, 40, "React ve TypeScript öğreniyorum.", ["React", "TypeScript"], ["Web"]),
   U("efeyalcin", "Efe Yalçın", "Bilecik Şeyh Edebali Üniversitesi", "Bilecik", "Backend", "Yeni başlayan", 220, 30, "Go ile küçük servisler.", ["Go", "SQLite"], ["Açık kaynak"]),
   U("buseoz", "Buse Öz", "Muğla Sıtkı Koçman Üniversitesi", "Muğla", "Veritabanı", "Yeni başlayan", 190, 20, "PostgreSQL ve veri modelleme.", ["PostgreSQL", "SQL"], ["Veri"]),
   U("arascan", "Aras Can", "Van Yüzüncü Yıl Üniversitesi", "Van", "DevOps", "Yeni başlayan", 160, 20, "Linux sunucular.", ["Linux", "Docker"], ["Altyapı"]),
-  U("nisaay", "Nisa Ay", "Kastamonu Üniversitesi", "Kastamonu", "Mobil", "Yeni başlayan", 80, 10, "Flutter ile ilk uygulamam.", ["Flutter"], ["Mobil"]),
+  U("nisaay", "Nisa Ay", "Kastamonu Üniversitesi", "Kastamonu", "Cross-Platform", "Yeni başlayan", 80, 10, "Flutter ile ilk uygulamam.", ["Flutter"], ["Mobil"]),
   U("omerfaruk", "Ömer Faruk Er", "Düzce Üniversitesi", "Düzce", "Backend", "Yeni başlayan", 60, 0, "Python öğreniyorum.", ["Python", "Flask"], ["Yapay zeka"]),
-  U("hilalsoy", "Hilal Soy", "Bartın Üniversitesi", "Bartın", "Frontend", "Yeni başlayan", 50, 0, "HTML ve CSS.", ["HTML", "CSS"], ["Tasarım"]),
-  U("kemalduru", "Kemal Duru", "Aksaray Üniversitesi", "Aksaray", "DevOps", "Yeni başlayan", 40, 0, "Bash ve otomasyon.", ["Bash", "Linux"], ["Otomasyon"]),
-  U("sevgiekin", "Sevgi Ekin", "Ordu Üniversitesi", "Ordu", "Veritabanı", "Yeni başlayan", 20, 0, "SQL'e yeni başladım.", ["SQL"], ["Veri"]),
-  U("tunaari", "Tuna Arı", "Giresun Üniversitesi", "Giresun", "Mobil", "Yeni başlayan", 10, 0, "Kotlin.", ["Kotlin"], ["Mobil"]),
+  U("hilalsoy", "Hilal Soy", "Bartın Üniversitesi", "Bartın", "Oyun Geliştirme", "Yeni başlayan", 50, 0, "Unity ile 2D oyunlar.", ["Unity", "C#"], ["Oyun"]),
+  U("kemalduru", "Kemal Duru", "Aksaray Üniversitesi", "Aksaray", "Siber Güvenlik", "Yeni başlayan", 40, 0, "CTF ve web güvenliği öğreniyorum.", ["Linux", "Bash", "OWASP"], ["CTF", "Güvenlik"]),
+  U("sevgiekin", "Sevgi Ekin", "Ordu Üniversitesi", "Ordu", "Veri Bilimi", "Yeni başlayan", 20, 0, "Pandas ve SQL ile veri analizi.", ["Python", "Pandas", "SQL"], ["Veri"]),
+  U("tunaari", "Tuna Arı", "Giresun Üniversitesi", "Giresun", "Android", "Yeni başlayan", 10, 0, "Kotlin.", ["Kotlin"], ["Mobil"]),
   U("ruyasu", "Rüya Su", "Sinop Üniversitesi", "Sinop", "Frontend", "Yeni başlayan", 0, 0, "Web geliştirmeye yeni başladım.", ["JavaScript"], ["Web"]),
 ];
 
@@ -152,7 +154,7 @@ export function combo(target: number): number[] {
   return [];
 }
 
-const NAMES: Record<Field, { name: string; desc: string; techs: string[]; file: string; feature: string }[]> = {
+const NAMES: Partial<Record<Field, { name: string; desc: string; techs: string[]; file: string; feature: string }[]>> = {
   Frontend: [
     { name: "ui-kit", desc: "Erişilebilir React bileşen kütüphanesi.", techs: ["React", "TypeScript"], file: "src/components/Dialog.tsx", feature: "Odak tuzağı ve klavye yönetimi" },
     { name: "dashboard", desc: "Gerçek zamanlı satış panosu.", techs: ["Next.js", "WebSocket"], file: "app/api/stream/route.ts", feature: "Sunucudan canlı veri akışı" },
@@ -171,7 +173,7 @@ const NAMES: Record<Field, { name: string; desc: string; techs: string[]; file: 
     { name: "etl-pipe", desc: "Günlük veri aktarım hattı.", techs: ["Python", "Airflow"], file: "dags/daily.py", feature: "Zamanlanmış veri hattı" },
     { name: "migrator", desc: "Şema göç aracı.", techs: ["Go", "PostgreSQL"], file: "cmd/migrate.go", feature: "Sürüm takipli şema göçü" },
   ],
-  Mobil: [
+  "Cross-Platform": [
     { name: "rota-app", desc: "Rota planlama uygulaması.", techs: ["Flutter"], file: "lib/route_service.dart", feature: "Harita ve rota servisi" },
     { name: "hava-durumu", desc: "Hava durumu uygulaması.", techs: ["Kotlin"], file: "app/src/main/MainActivity.kt", feature: "Tek ekranlı uygulama" },
     { name: "offline-notes", desc: "Çevrimdışı senkronize not uygulaması.", techs: ["Flutter", "SQLite"], file: "lib/sync/sync_engine.dart", feature: "Çevrimdışı senkronizasyon" },
@@ -185,6 +187,9 @@ const NAMES: Record<Field, { name: string; desc: string; techs: string[]; file: 
   ],
 };
 
+// Listesi olmayan alanlar en yakın listeyi kullanır.
+const namesFor = (f: Field) => NAMES[f] ?? (f === "iOS" || f === "Android" ? NAMES["Cross-Platform"]! : f === "Full Stack" ? NAMES.Frontend! : NAMES.Backend!);
+
 /** Hedef puanı tam tutturan projeler; tarihleri verilen aralığa yayılır. */
 export function projectsFor(u: SeedUser, target: number, from: string, to: string, offset = 0): SeedProject[] {
   const pts = combo(target);
@@ -192,10 +197,11 @@ export function projectsFor(u: SeedUser, target: number, from: string, to: strin
   const b = new Date(to).getTime();
   return pts.map((p, i) => {
     const k = PROJECT_KINDS.find((x) => x.pts === p)!;
-    const n = NAMES[u.field][(i + offset) % NAMES[u.field].length];
+    const names = namesFor(u.field);
+    const n = names[(i + offset) % names.length];
     const at = new Date(a + ((b - a) * (i + 1)) / (pts.length + 1)).toISOString().slice(0, 10);
     return {
-      name: `${n.name}${i + offset >= NAMES[u.field].length ? `-${i + offset}` : ""}`,
+      name: `${n.name}${i + offset >= names.length ? `-${i + offset}` : ""}`,
       description: n.desc,
       techs: n.techs,
       difficulty: k.difficulty,
@@ -494,7 +500,7 @@ export const COMPETITIONS: SeedCompetition[] = [
     isDemo: false,
     teams: [],
     applicants: [
-      { username: "aysayildiz", field: "Veritabanı" },
+      { username: "aysayildiz", field: "Veri Bilimi" },
       { username: "mehmetsahin", field: "Frontend" },
       { username: "eceyilmaz", field: "Frontend" },
       { username: "zehrakurt", field: "Frontend" },
@@ -502,9 +508,9 @@ export const COMPETITIONS: SeedCompetition[] = [
       { username: "ardademir", field: "Backend" },
       { username: "efeyalcin", field: "Backend" },
       { username: "melisdag", field: "Backend" },
-      { username: "keremoral", field: "Veritabanı" },
-      { username: "buseoz", field: "Veritabanı" },
-      { username: "ezgitas", field: "Veritabanı" },
+      { username: "keremoral", field: "Veri Bilimi" },
+      { username: "buseoz", field: "Veri Bilimi" },
+      { username: "ezgitas", field: "Veri Bilimi" },
     ],
   },
   {
@@ -519,15 +525,54 @@ export const COMPETITIONS: SeedCompetition[] = [
     isDemo: false,
     teams: [],
     applicants: [
-      { username: "hilalsoy", field: "Frontend" },
-      { username: "ruyasu", field: "Frontend" },
-      { username: "omerfaruk", field: "Backend" },
-      { username: "pelinakin", field: "Frontend" },
-      { username: "yusufkara", field: "Backend" },
+      { username: "hilalsoy", field: "Full Stack" },
+      { username: "ruyasu", field: "Full Stack" },
+      { username: "omerfaruk", field: "Test / QA" },
+      { username: "pelinakin", field: "Full Stack" },
+      { username: "yusufkara", field: "Test / QA" },
     ],
   },
   { id: "y-09", code: "Y-09", specId: "canli-siparis", status: "Sırada", publishOn: addDays(today, 12), applyDeadline: addDays(today, 19), start: addDays(today, 21), end: addDays(today, 49), isDemo: false, teams: [] },
   { id: "y-10", code: "Y-10", specId: "bilet-satisi", status: "Taslak", publishOn: addDays(today, 40), applyDeadline: addDays(today, 47), start: addDays(today, 49), end: addDays(today, 77), isDemo: false, teams: [] },
+  // Yeni alanların yarışmaları (6 Ekim 2026 akşam): oyun, mobil, yapay zeka / veri, siber güvenlik, gömülü / IoT.
+  {
+    id: "y-11",
+    code: "Y-11",
+    specId: "hafiza-oyunu",
+    status: "Başvurular açık",
+    publishOn: addDays(today, -1),
+    applyDeadline: addDays(today, 8),
+    start: addDays(today, 10),
+    end: addDays(today, 24),
+    isDemo: false,
+    teams: [],
+    applicants: [
+      { username: "hilalsoy", field: "Oyun Geliştirme" },
+      { username: "selinaksoy", field: "Oyun Geliştirme" },
+      { username: "mertaydin", field: "Backend" },
+    ],
+  },
+  {
+    id: "y-12",
+    code: "Y-12",
+    specId: "duygu-analizi",
+    status: "Başvurular açık",
+    publishOn: addDays(today, -3),
+    applyDeadline: addDays(today, 9),
+    start: addDays(today, 11),
+    end: addDays(today, 32),
+    isDemo: false,
+    teams: [],
+    applicants: [
+      { username: "melisdag", field: "Yapay Zeka" },
+      { username: "omerfaruk", field: "Yapay Zeka" },
+      { username: "sevgiekin", field: "Veri Bilimi" },
+      { username: "nazlicetin", field: "Frontend" },
+    ],
+  },
+  { id: "y-13", code: "Y-13", specId: "guvenli-not", status: "Sırada", publishOn: addDays(today, 7), applyDeadline: addDays(today, 14), start: addDays(today, 16), end: addDays(today, 37), isDemo: false, teams: [] },
+  { id: "y-14", code: "Y-14", specId: "akilli-sera", status: "Sırada", publishOn: addDays(today, 20), applyDeadline: addDays(today, 27), start: addDays(today, 29), end: addDays(today, 50), isDemo: false, teams: [] },
+  { id: "y-15", code: "Y-15", specId: "alisveris-listesi", status: "Taslak", publishOn: addDays(today, 30), applyDeadline: addDays(today, 37), start: addDays(today, 39), end: addDays(today, 53), isDemo: false, teams: [] },
 ];
 
 export const DEMO_CONVERSATIONS = [

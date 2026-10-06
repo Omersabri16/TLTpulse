@@ -210,7 +210,7 @@ export const loadPublicProfile = cache(async (username: string): Promise<(Profil
     db().from("projects").select(PROJECT_COLS).eq("user_id", p.id).order("created_at", { ascending: false }),
     db().from("certificates").select("id, name, provider, link, issued_on, status, points").eq("user_id", p.id).order("issued_on", { ascending: false }),
     db().from("approvals").select(APPROVAL_COLS).eq("user_id", p.id).eq("status", "Onaylandı"),
-    db().from("connections").select("other_id").eq("user_id", p.id).limit(12),
+    db().from("connections").select("other_id").eq("user_id", p.id).limit(500),
     db().from("team_members").select("team_id, competition_id, field, points").eq("user_id", p.id),
     db().from("badges").select("kind, label, created_at").eq("user_id", p.id).order("created_at", { ascending: false }),
     db().from("credentials").select("id, kind, title, status, url").eq("user_id", p.id).eq("status", "Gönderildi"),

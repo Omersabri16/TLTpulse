@@ -1,16 +1,18 @@
 "use client";
 
-import { FileText, FileUp, PencilLine, Sparkles } from "lucide-react";
+import { FileText, FileUp, GitBranch, PartyPopper, PencilLine, Share2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AddProjectDialog } from "@/components/add-project-dialog";
 import { CertificateDialog } from "@/components/certificate-dialog";
 import { CvUploadDialog } from "@/components/cv-upload-dialog";
+import { GithubVerify } from "@/components/github-verify";
 import { Card, PageShell } from "@/components/page-shell";
 import { ProfileEditDialog } from "@/components/profile-edit-dialog";
 import { ProfileView } from "@/components/profile-view";
 import { ReferenceDialog } from "@/components/reference-dialog";
+import { ShareDialog } from "@/components/share-dialog";
 import { Progress } from "@/components/ui/progress";
 import { btn } from "@/lib/btn";
 import { completeness } from "@/lib/score";
@@ -36,6 +38,8 @@ function MyProfile() {
   const [ref, setRef] = useState<{ open: boolean; preset?: string }>(() => ({ open: !!params.get("onay") }));
   const [addProject, setAddProject] = useState(false);
   const [cv, setCv] = useState(() => !!params.get("cv"));
+  const achievement = useApp((s) => s.achievement);
+  const [share, setShare] = useState(() => !!params.get("paylas"));
 
   useEffect(() => {
     if (params.size) router.replace("/profil", { scroll: false });
@@ -80,6 +84,34 @@ function MyProfile() {
         onAddProject={() => setAddProject(true)}
         sidebarTop={
           <>
+            {achievement && (
+              <div className="rounded-3xl border border-primary/30 bg-secondary p-6 text-secondary-foreground">
+                <p className="flex items-center gap-2 font-semibold">
+                  <PartyPopper className="size-4" /> {achievement.headline}!
+                </p>
+                <p className="mt-1 text-sm">{achievement.sub}</p>
+                <button onClick={() => setShare(true)} className={btn("primary", "sm", "mt-4")}>
+                  <Share2 /> Instagram ve X&apos;te paylaş
+                </button>
+              </div>
+            )}
+            {!profile.githubVerified && (
+              <Card>
+                <h2 className="mb-3 flex items-center gap-2 font-semibold">
+                  <GitBranch className="size-4" /> GitHub doğrulaması
+                </h2>
+                {profile.github ? (
+                  <GithubVerify />
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">Proje eklemek ve yarışma puanı almak için GitHub hesabını ekleyip doğrula.</p>
+                    <button onClick={() => setEdit(true)} className={btn("primary", "sm", "mt-3")}>
+                      GitHub kullanıcı adını ekle
+                    </button>
+                  </>
+                )}
+              </Card>
+            )}
             {comp.percent < 100 && (
               <Card>
                 <div className="mb-3 flex items-center justify-between">
@@ -136,6 +168,7 @@ function MyProfile() {
       <ReferenceDialog open={ref.open} preset={ref.preset} onOpenChange={(o) => setRef({ open: o })} />
       <AddProjectDialog open={addProject} onOpenChange={setAddProject} />
       <CvUploadDialog open={cv} onOpenChange={setCv} />
+      {achievement && <ShareDialog open={share} onOpenChange={setShare} username={profile.username} headline={achievement.headline} />}
     </>
   );
 }

@@ -375,6 +375,39 @@ export type Database = {
         }
         Relationships: []
       }
+      connection_requests: {
+        Row: {
+          created_at: string
+          from_id: string
+          to_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_id: string
+          to_id: string
+        }
+        Update: {
+          created_at?: string
+          from_id?: string
+          to_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connection_requests_from_id_fkey"
+            columns: ["from_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connection_requests_to_id_fkey"
+            columns: ["to_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       connections: {
         Row: {
           created_at: string

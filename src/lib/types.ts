@@ -1,5 +1,35 @@
-export type Field = "Frontend" | "Backend" | "Veritabanı" | "Mobil" | "DevOps";
-export const FIELDS: Field[] = ["Frontend", "Backend", "Veritabanı", "Mobil", "DevOps"];
+/** Yazılım alanları (pozisyonlar). Gruplar sadece seçim ekranında başlık. Liste SQL'de de var (migration 0004). */
+export const FIELD_GROUPS = [
+  { group: "Web geliştirme", fields: ["Frontend", "Backend", "Full Stack", "Veritabanı"] },
+  { group: "Mobil", fields: ["iOS", "Android", "Cross-Platform"] },
+  { group: "Yapay zeka ve veri bilimi", fields: ["Veri Bilimi", "Yapay Zeka"] },
+  { group: "Siber güvenlik", fields: ["Siber Güvenlik"] },
+  { group: "Bulut ve DevOps", fields: ["Bulut Bilişim", "DevOps"] },
+  { group: "Oyun geliştirme", fields: ["Oyun Geliştirme"] },
+  { group: "Gömülü sistemler ve IoT", fields: ["Gömülü / IoT"] },
+  { group: "Test ve kalite güvencesi", fields: ["Test / QA"] },
+] as const;
+export type Field = (typeof FIELD_GROUPS)[number]["fields"][number];
+export const FIELDS: Field[] = FIELD_GROUPS.flatMap((g) => [...g.fields]);
+
+/** Seçim ekranlarında alanın altında görünen kısa açıklama. */
+export const FIELD_INFO: Record<Field, string> = {
+  Frontend: "Kullanıcının gördüğü arayüz: HTML, CSS, JavaScript, React",
+  Backend: "Sunucu, iş mantığı, API ve güvenlik: Node.js, Python, Java, C#",
+  "Full Stack": "Ön yüz ve arka yüz birlikte",
+  Veritabanı: "Veri modelleme, sorgu ve performans: SQL, PostgreSQL, MongoDB",
+  iOS: "iPhone ve iPad uygulamaları: Swift",
+  Android: "Android uygulamaları: Kotlin, Java",
+  "Cross-Platform": "Tek kodla iOS ve Android: Flutter, React Native",
+  "Veri Bilimi": "Veri analizi ve istatistiksel öngörü: Python, R, SQL",
+  "Yapay Zeka": "Makine öğrenmesi, derin öğrenme, NLP",
+  "Siber Güvenlik": "Zafiyet tespiti, güvenli kod, sızma testi",
+  "Bulut Bilişim": "AWS, Azure, Google Cloud altyapısı",
+  DevOps: "CI/CD, otomatik test ve yayın, konteynerler",
+  "Oyun Geliştirme": "2D/3D oyunlar: Unity (C#), Unreal (C++)",
+  "Gömülü / IoT": "Mikrodenetleyiciler, akıllı cihazlar: C, C++",
+  "Test / QA": "Hata yakalama ve test otomasyonu",
+};
 
 export type Level = "Yeni başlayan" | "Orta" | "Kıdemli";
 export const LEVELS: Level[] = ["Yeni başlayan", "Orta", "Kıdemli"];
@@ -397,6 +427,10 @@ export interface MeData {
   kvkkAccepted: boolean;
   /** Engellediğin kullanıcı adları */
   blocked: string[];
+  /** Bağlantı istekleri (kullanıcı adları; ad ve alan `people`'da) */
+  connectionRequests: { incoming: string[]; outgoing: string[] };
+  /** Son kapanan sezonda lig atladıysa ya da şampiyon olduysa paylaşılacak başlık */
+  achievement: { headline: string; sub: string } | null;
 }
 
 /** Sunucu aksiyonlarının ortak cevabı. */

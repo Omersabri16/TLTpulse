@@ -59,7 +59,7 @@ export async function exportMyData() {
     const user = await requireUser();
     if (!(await allow(user.id, "export", 3, 24))) throw new UserError("Bugün yeterince indirme yaptın. Yarın tekrar dene.");
     const q = (t: string, col = "user_id", cols = "*") => db().from(t).select(cols).eq(col, user.id);
-    const [profile, experiences, projects, certificates, approvals, applications, teams, teamMessages, messages, peerGiven, peerReceived, events, notifications, roadmap, badges, credentials, reports, blocks] =
+    const [profile, experiences, projects, certificates, approvals, applications, teams, teamMessages, messages, peerGiven, peerReceived, events, notifications, roadmap, badges, credentials, reports, blocks, connections, sentRequests] =
       await Promise.all([
         q("profiles", "id", "username, name, headline, field, school, department, city, github, github_verified, about, interests, skills, education, cv_code, score, league, season_points, kvkk_accepted_at, created_at"),
         q("experiences"),
@@ -79,6 +79,8 @@ export async function exportMyData() {
         q("credentials", "user_id", "kind, title, status, url, created_at"),
         q("reports", "reporter_id", "target_type, target_id, reason, status, created_at"),
         q("blocks"),
+        q("connections", "user_id", "other_id, created_at"),
+        q("connection_requests", "from_id", "to_id, created_at"),
       ]);
     return {
       olusturuldu: new Date().toISOString(),
@@ -101,6 +103,8 @@ export async function exportMyData() {
       certifier: credentials.data,
       sikayetlerin: reports.data,
       engellediklerin: blocks.data,
+      baglantilar: connections.data,
+      gonderdigin_baglanti_istekleri: sentRequests.data,
     };
   });
 }
@@ -121,6 +125,7 @@ export async function blockUser(username: string) {
     if (other === user.id) throw new UserError("Kendini engelleyemezsin.");
     check(await db().from("blocks").upsert({ user_id: user.id, blocked_id: other }, { onConflict: "user_id,blocked_id", ignoreDuplicates: true }), "engelleme");
     await db().from("connections").delete().or(`and(user_id.eq.${user.id},other_id.eq.${other}),and(user_id.eq.${other},other_id.eq.${user.id})`);
+    await db().from("connection_requests").delete().or(`and(from_id.eq.${user.id},to_id.eq.${other}),and(from_id.eq.${other},to_id.eq.${user.id})`);
     return loadMe(user.id, user.email);
   });
 }

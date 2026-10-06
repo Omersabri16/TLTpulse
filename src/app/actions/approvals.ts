@@ -77,8 +77,17 @@ export async function requestApproval(input: z.input<typeof RequestInput>) {
       targetId = x.id;
       targetLabel = `${x.name} projesi`;
     }
-    const pending = await db().from("approvals").select("id").eq("user_id", user.id).eq("target_id", targetId).eq("approver_email", v.approverEmail).eq("status", "Bekliyor").maybeSingle();
-    if (pending.data) throw new UserError("Bu kişiden bu bilgi için bekleyen bir onay isteğin zaten var.");
+    // Bir deneyim ya da projeye tek onay: birden fazla e-posta hesabı açıp aynı stajı tekrar tekrar onaylatarak puan
+    // toplanamasın. Reddedilen ya da süresi dolan istekten sonra yeni istek gönderilebilir.
+    const existing = (check(await db().from("approvals").select("id, status, expires_at").eq("user_id", user.id).eq("target_id", targetId), "onay") ?? []) as {
+      id: string;
+      status: string;
+      expires_at: string;
+    }[];
+    if (existing.some((a) => a.status === "Onaylandı")) throw new UserError("Bu bilgi zaten onaylandı. Bir deneyim ya da proje için tek onay alınabilir.");
+    const stale = existing.filter((a) => a.status === "Bekliyor" && new Date(a.expires_at).getTime() < Date.now()).map((a) => a.id);
+    if (existing.some((a) => a.status === "Bekliyor" && !stale.includes(a.id))) throw new UserError("Bu bilgi için bekleyen bir onay isteğin zaten var. Yanıtlanmasını bekle.");
+    if (stale.length) await db().from("approvals").delete().in("id", stale);
 
     const token = newToken();
     const inserted = check(
@@ -125,11 +134,15 @@ export async function answerApproval(input: z.input<typeof AnswerInput>) {
     const hash = tokenHash(v.token);
     const found = await db()
       .from("approvals")
-      .select("id, user_id, approver_name, approver_email, target_label, status, expires_at")
+      .select("id, user_id, target_id, approver_name, approver_email, target_label, status, expires_at")
       .eq("token_hash", hash)
       .maybeSingle();
-    const a = found.data as { id: string; user_id: string; approver_name: string; approver_email: string; target_label: string; status: string; expires_at: string } | null;
+    const a = found.data as { id: string; user_id: string; target_id: string; approver_name: string; approver_email: string; target_label: string; status: string; expires_at: string } | null;
     if (!a || a.status !== "Bekliyor" || new Date(a.expires_at).getTime() < Date.now()) throw new UserError("Bu onay linki geçersiz, süresi dolmuş ya da daha önce kullanılmış.");
+    if (v.approve) {
+      const other = await db().from("approvals").select("id").eq("user_id", a.user_id).eq("target_id", a.target_id).eq("status", "Onaylandı").limit(1);
+      if (other.data?.length) throw new UserError("Bu bilgi başka biri tarafından zaten onaylanmış. Teşekkürler, ek bir işlem gerekmiyor.");
+    }
 
     const comment = v.approve ? v.comment?.trim() || null : null;
     const points = v.approve ? referencePoints(a.approver_email, !!comment) : 0;

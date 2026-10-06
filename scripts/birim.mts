@@ -13,6 +13,8 @@ import {
   teamPoints,
   teamworkScore,
   verifyCertificate,
+  promotionCount,
+  relegationCount,
 } from "../src/lib/score.ts";
 import { stripComments } from "../src/lib/strip-comments.ts";
 
@@ -32,8 +34,10 @@ eq("Zor + tam kalite = 100", projectPoints({ difficulty: "Zor", ...full, importe
 eq("Zor, kalitesiz = 70", projectPoints({ difficulty: "Zor", ci: false, demo: false, readme: false, commitDays: 0, importedRatio: 0 }), 70);
 eq("Kalite: CI 12 + demo 8 + README 4 + 10 gün 6", qualityPoints(full), 30);
 eq("9 gün commit sayılmaz", qualityPoints({ ci: false, demo: false, readme: false, commitDays: 9 }), 0);
-eq("İçe aktarılmış %80: puan × 0.2", projectPoints({ difficulty: "Zor", ...full, importedRatio: 0.8 }), 20);
-eq("İçe aktarılmış %60 sınırda: puan aynı", projectPoints({ difficulty: "Orta", ...full, importedRatio: 0.6 }), 70);
+eq("İçe aktarılmış Zor %80: puan × 0.2", projectPoints({ difficulty: "Zor", ...full, importedRatio: 0.8 }), 20);
+eq("İçe aktarılmış Zor %60 sınırda: puan aynı", projectPoints({ difficulty: "Zor", ...full, importedRatio: 0.6 }), 100);
+eq("Tek commit'li Orta: ceza yok", projectPoints({ difficulty: "Orta", ...full, importedRatio: 1 }), 70);
+eq("Tek commit'li Kolay: ceza yok", projectPoints({ difficulty: "Kolay", ...full, importedRatio: 1 }), 10);
 eq("Kalite etiketi", [qualityLabel(30), qualityLabel(12), qualityLabel(4)], ["Çok iyi", "İyi", "Zayıf"]);
 
 // --- Yarışma puanı ---
@@ -76,6 +80,24 @@ const items = scoreItems({
 eq("Defter: analiz bekleyen proje ve bekleyen onay puan almaz", items.map((i) => i.ref), ["project:p1", "comp:y-05", "peer:y-05", "mentor:y-05", "roadmap:t:s-1"]);
 eq("Defter: toplam", items.reduce((a, i) => a + i.points, 0), 70 + 87 + 30 + 15 + 10);
 eq("Defter: yol haritası adımı geri alınmaz (sticky)", items.find((i) => i.ref.startsWith("roadmap"))?.sticky, true);
+const onaylar = scoreItems({
+  projects: [],
+  certs: [],
+  approvals: [
+    { id: "o2", targetId: "staj", answeredAt: "2026-10-02", label: "Staj", approverName: "İkinci", status: "Onaylandı", points: 30 },
+    { id: "o1", targetId: "staj", answeredAt: "2026-10-01", label: "Staj", approverName: "İlk", status: "Onaylandı", points: 10 },
+    { id: "o3", targetId: "proje", answeredAt: "2026-10-03", label: "Proje", approverName: "Hoca", status: "Onaylandı", points: 30 },
+  ],
+  competitions: [],
+  peer: [],
+  mentor: [],
+  roadmap: [],
+});
+eq("Defter: bir deneyime tek onay puan verir (ilk onaylanan)", onaylar.map((i) => i.ref), ["approval:o1", "approval:o3"]);
+
+// --- Lig: yüzdelik yükselme / düşme ---
+eq("Yükselme ilk %20, yukarı yuvarlanır", [promotionCount(25), promotionCount(10), promotionCount(3), promotionCount(0)], [5, 2, 1, 0]);
+eq("Düşme son %10, aşağı yuvarlanır", [relegationCount(25), relegationCount(10), relegationCount(9)], [2, 1, 0]);
 
 // --- Takım kurma (yılan sırası) ---
 const d = snakeDraft([

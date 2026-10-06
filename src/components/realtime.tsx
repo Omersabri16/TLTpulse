@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { markSeasonSeen } from "@/app/actions/account";
 import { refreshMe } from "@/app/actions/auth";
@@ -19,17 +20,18 @@ export function RealtimeBridge() {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const seasonResult = useApp((s) => s.seasonResult);
   const shown = useRef(false);
+  const router = useRouter();
 
   // Sezon kapandıktan sonraki ilk girişte lig değişimi (konfeti) bir kez gösterilir.
   useEffect(() => {
     if (!seasonResult || shown.current) return;
     shown.current = true;
     const t = setTimeout(() => {
-      celebrateSeason(seasonResult);
+      celebrateSeason(seasonResult, () => router.push("/profil?paylas=1"));
       void act(markSeasonSeen(), { silent: true });
     }, 600);
     return () => clearTimeout(t);
-  }, [seasonResult, act]);
+  }, [seasonResult, act, router]);
 
   useEffect(() => {
     if (!username) return;

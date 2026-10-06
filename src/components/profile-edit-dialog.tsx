@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { saveProfile } from "@/app/actions/profile";
+import { FieldPicker } from "@/components/field-picker";
 import { GithubVerify } from "@/components/github-verify";
-import { Choice, Field, Modal } from "@/components/modal";
+import { Field, Modal } from "@/components/modal";
 import { TagInput } from "@/components/tag-input";
 import { btn, inputClass } from "@/lib/btn";
 import { useAct, useApp } from "@/lib/store";
-import { FIELDS, type Field as FieldT } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function ProfileEditDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -66,7 +66,7 @@ function ProfileEditBody({ onOpenChange }: { onOpenChange: (o: boolean) => void 
           </Field>
         </div>
         <Field label="Alan">
-          <Choice<FieldT | ""> value={f.field} onChange={(v) => set("field", v)} options={FIELDS} />
+          <FieldPicker compact value={f.field} onChange={(v) => set("field", v)} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Okul">

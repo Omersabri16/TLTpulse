@@ -131,7 +131,7 @@ export function HomeView() {
           ))}
         </Chapter>
 
-        <Chapter no="03" title="Sezonda yüksel." text={<>Herkes <b>Yeni başlayan</b> liginde başlar. 6 aylık sezonun sonunda her ligin <b>ilk 20&apos;si</b> bir üst lige çıkar: Orta, sonra Kıdemli. Kıdemli&apos;nin ilk 20&apos;si sezon şampiyonu olur.</>}>
+        <Chapter no="03" title="Sezonda yüksel." text={<>Herkes <b>Yeni başlayan</b> liginde başlar. 6 aylık sezonun sonunda her ligin <b>ilk %20&apos;si</b> bir üst lige çıkar: Orta, sonra Kıdemli. Kıdemli&apos;nin ilk %20&apos;si sezon şampiyonu olur.</>}>
           <div className="flex flex-wrap gap-2 py-4">
             <Pill tone="muted">Yeni başlayan</Pill>
             <Pill tone="lav">Orta</Pill>

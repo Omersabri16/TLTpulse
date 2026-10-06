@@ -13,7 +13,7 @@ export default async function Page() {
   const data = await loadAdmin();
   return (
     <PageShell auth>
-      <AdminView data={data} bank={SPEC_BANK.map((s) => ({ id: s.id, title: s.title, tagline: s.tagline, difficulty: s.difficulty, applyDays: s.applyDays, buildDays: s.buildDays, hiddenCount: s.hiddenCount, publicCount: s.publicTests.length }))} />
+      <AdminView data={data} bank={SPEC_BANK.map((s) => ({ id: s.id, title: s.title, tagline: s.tagline, difficulty: s.difficulty, applyDays: s.applyDays, buildDays: s.buildDays, hiddenCount: s.hiddenCount, publicCount: s.publicTests.length, positions: s.positions }))} />
     </PageShell>
   );
 }

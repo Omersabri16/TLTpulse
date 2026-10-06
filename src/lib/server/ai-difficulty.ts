@@ -34,7 +34,7 @@ const Output = z.object({
 const CONFIG = () => ({
   systemInstruction: SYSTEM,
   temperature: 0,
-  maxOutputTokens: 2048,
+  maxOutputTokens: 8192, // düşünme token'ları da bu sınırdan yiyor
   responseMimeType: "application/json",
   responseSchema: {
     type: Type.OBJECT,

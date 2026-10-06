@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, CalendarClock, CircleCheck, CircleX, FlaskConical, Play, Plus, RefreshCw, Sparkles, Trash2, Users, Wand2 } from "lucide-react";
+import { Ban, CalendarClock, CircleCheck, CircleX, FlaskConical, Play, Plus, RefreshCw, Search, Sparkles, Trash2, Users, Wand2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -10,18 +10,24 @@ import {
   closeReport,
   closeSeasonNow,
   createCompetition,
+  adminTeamsAction,
   deleteDraft,
   draftSpecAction,
   evaluateNow,
+  findUserAction,
   formTeamsNow,
+  moveTeamMember,
   generateTestsAction,
   publishNow,
   pushTestsAction,
   queueCompetition,
   runDailyNow,
+  setLeagueAction,
   setSuspended,
   validateTestsAction,
+  type AdminTeams,
 } from "@/app/actions/admin";
+import { FieldSelect } from "@/components/field-picker";
 import { Choice, Field, Modal } from "@/components/modal";
 import { Card, Container, PageHero, Pill } from "@/components/page-shell";
 import { btn, inputClass } from "@/lib/btn";
@@ -29,7 +35,7 @@ import { fmtDate } from "@/lib/competitions";
 import type { AdminCompetition, AdminData } from "@/lib/server/admin-data";
 import { COMPETITION_MAX, TEAM_FIELDS } from "@/lib/score";
 import { useAct } from "@/lib/store";
-import type { CompetitionSpec, Difficulty } from "@/lib/types";
+import { LEVELS, type CompetitionSpec, type Difficulty, type Field as FieldT, type Level } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface BankItem {
@@ -41,11 +47,12 @@ interface BankItem {
   buildDays: number;
   hiddenCount: number;
   publicCount: number;
+  positions: FieldT[];
 }
 
 const CRITERIA: [string, string, string, string][] = [
   ["Ne yapılıyor", "Tek özellik, ekle / listele / sil", "Giriş, veritabanı, API, birden fazla ekran", "Gerçek zamanlı, birden fazla servis, rol / yetki, eşzamanlılık"],
-  ["Takım", "2 kişi (Frontend + Backend)", "3 kişi (+ Veritabanı)", "4 kişi (+ DevOps)"],
+  ["Takım", "2 kişi", "3 kişi", "4 kişi"],
   ["Süre", "2 hafta", "3 hafta", "4 hafta"],
   ["Gizli test", "~10", "~20", "~30"],
   ["En yüksek puan", "100", "150", "200"],
@@ -91,6 +98,11 @@ export function AdminView({ data, bank }: { data: AdminData; bank: BankItem[] })
   const [season, setSeason] = useState(false);
   const [seasonConfirm, setSeasonConfirm] = useState("");
   const [report, setReport] = useState<string>("");
+  const [teamsOf, setTeamsOf] = useState<{ comp: AdminCompetition; data: AdminTeams } | null>(null);
+  const openTeams = async (c: AdminCompetition) => {
+    const d = await run(`takimlar:${c.id}`, adminTeamsAction(c.id));
+    if (d) setTeamsOf({ comp: c, data: d });
+  };
 
   const run = async <T,>(key: string, p: Promise<{ ok: true; data: T } | { ok: false; error: string }>, success?: string) => {
     setBusy(key);
@@ -132,6 +144,7 @@ export function AdminView({ data, bank }: { data: AdminData; bank: BankItem[] })
           if (r) toast(r.cancelled ? "Yeterli başvuru yok; yarışma iptal edildi." : `${r.teams} takım kuruldu, ${r.substitutes} yedek.`);
         }),
       );
+    if (c.teams > 0) list.push(b("takimlar", <><Users /> {c.status === "Devam ediyor" ? "Takımları düzenle" : "Takımlar"}</>, () => openTeams(c)));
     if (c.status === "Devam ediyor")
       list.push(
         b("degerlendir", <><Play /> Şimdi değerlendir</>, async () => {
@@ -277,6 +290,8 @@ export function AdminView({ data, bank }: { data: AdminData; bank: BankItem[] })
           )}
         </Section>
 
+        <LeagueTool />
+
         {data.suspended.length > 0 && (
           <Section title="Askıdaki kullanıcılar">
             <ul className="divide-y">
@@ -294,6 +309,8 @@ export function AdminView({ data, bank }: { data: AdminData; bank: BankItem[] })
           </Section>
         )}
       </Container>
+
+      {teamsOf && <TeamsDialog comp={teamsOf.comp} data={teamsOf.data} onClose={() => setTeamsOf(null)} onChanged={() => openTeams(teamsOf.comp)} />}
 
       <CreateDialog open={creating} onOpenChange={setCreating} bank={bank} onCreated={() => router.refresh()} />
 
@@ -372,7 +389,7 @@ export function AdminView({ data, bank }: { data: AdminData; bank: BankItem[] })
         </div>
       </Modal>
 
-      <Modal open={season} onOpenChange={setSeason} title="Sezonu şimdi bitir" description="Her ligin ilk 20'si (100+ puanla) yükselir, Orta ve Kıdemli'nin son 20'si (100 altı) düşer, şampiyonlar rozet alır, herkesin sezon puanı sıfırlanır ve yeni sezon başlar. Geri alınamaz.">
+      <Modal open={season} onOpenChange={setSeason} title="Sezonu şimdi bitir" description="Her ligin ilk %20'si (100+ puanla) yükselir, Orta ve Kıdemli'nin son %10'u (100 altı) düşer, şampiyonlar rozet alır, herkesin sezon puanı sıfırlanır ve yeni sezon başlar. Geri alınamaz.">
         <div className="grid gap-4">
           <Field label='Onay için "SEZONU BİTİR" yaz'>
             <input className={inputClass} value={seasonConfirm} onChange={(e) => setSeasonConfirm(e.target.value)} />
@@ -421,12 +438,16 @@ function CreateBody({ onOpenChange, bank, onCreated }: { onOpenChange: (o: boole
   const [start, setStart] = useState(addDays(base, 9));
   const [end, setEnd] = useState(addDays(base, 9 + 14));
   const [busy, setBusy] = useState("");
+  const [positions, setPositions] = useState<FieldT[]>(bank.find((b) => b.difficulty === "Kolay")?.positions ?? TEAM_FIELDS.Kolay);
+  const [adding, setAdding] = useState<FieldT>("Frontend");
+  const size = TEAM_FIELDS[difficulty].length;
 
   const choose = (d: Difficulty) => {
     setDifficulty(d);
     const b = bank.find((x) => x.difficulty === d);
     setSpecId(b?.id ?? "");
     setCustom(null);
+    setPositions(b?.positions ?? TEAM_FIELDS[d]);
     if (b) {
       setTitle(b.title);
       setTagline(b.tagline);
@@ -468,7 +489,9 @@ function CreateBody({ onOpenChange, bank, onCreated }: { onOpenChange: (o: boole
         <Field label="Zorluk">
           <Choice value={difficulty} onChange={choose} options={["Kolay", "Orta", "Zor"]} />
         </Field>
-        <p className="text-xs text-muted-foreground">Pozisyonlar: {TEAM_FIELDS[difficulty].join(" + ")} · en fazla {COMPETITION_MAX[difficulty]} puan</p>
+        <p className="text-xs text-muted-foreground">
+          {difficulty}: önerilen takım {size} kişi · en fazla {COMPETITION_MAX[difficulty]} puan
+        </p>
 
         <Field label="Şartname">
           <div className="grid gap-2">
@@ -485,13 +508,14 @@ function CreateBody({ onOpenChange, bank, onCreated }: { onOpenChange: (o: boole
                       setCustom(null);
                       setTitle(b.title);
                       setTagline(b.tagline);
+                      setPositions(b.positions);
                     }}
                     className="mt-1"
                   />
                   <span>
                     <b>{b.title}</b> <span className="text-muted-foreground">· {b.tagline}</span>
                     <span className="block text-xs text-muted-foreground">
-                      Bankadan · {b.publicCount} açık + {b.hiddenCount} gizli test · örnek çözümle doğrulandı
+                      {b.positions.join(" + ")} · {b.publicCount} açık + {b.hiddenCount} gizli test · örnek çözümle doğrulandı
                     </span>
                   </span>
                 </label>
@@ -533,6 +557,27 @@ function CreateBody({ onOpenChange, bank, onCreated }: { onOpenChange: (o: boole
           </div>
         </Field>
 
+        <Field label="Pozisyonlar (takım başına birer kişi)" hint={positions.length !== size ? `${difficulty} yarışmada önerilen ${size} pozisyon.` : undefined}>
+          <div className="flex flex-wrap items-center gap-2">
+            {positions.map((f) => (
+              <span key={f} className="inline-flex items-center gap-1 rounded-full bg-secondary py-1.5 pr-1.5 pl-3 text-sm font-medium text-secondary-foreground">
+                {f}
+                <button type="button" onClick={() => setPositions(positions.filter((x) => x !== f))} className="grid size-5 place-items-center rounded-full hover:bg-card" aria-label={`${f} pozisyonunu çıkar`}>
+                  <X className="size-3" />
+                </button>
+              </span>
+            ))}
+            {positions.length < 5 && (
+              <span className="flex items-center gap-1.5">
+                <FieldSelect className={cn(inputClass, "h-9 w-48 rounded-full text-sm")} value={adding} onChange={setAdding} label="Eklenecek pozisyon" />
+                <button type="button" disabled={positions.includes(adding)} onClick={() => setPositions([...positions, adding])} className={btn("outline", "sm")}>
+                  <Plus /> Ekle
+                </button>
+              </span>
+            )}
+          </div>
+        </Field>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Başlık">
             <input className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -562,10 +607,10 @@ function CreateBody({ onOpenChange, bank, onCreated }: { onOpenChange: (o: boole
             Vazgeç
           </button>
           <button
-            disabled={!!busy || (!specId && !custom)}
+            disabled={!!busy || (!specId && !custom) || positions.length < 2}
             onClick={async () => {
               setBusy("kaydet");
-              const id = await act(createCompetition({ title, tagline, difficulty, specId: custom ? undefined : specId, spec: custom ?? undefined, publishOn, applyDeadline, start, end }));
+              const id = await act(createCompetition({ title, tagline, difficulty, specId: custom ? undefined : specId, spec: custom ?? undefined, positions, publishOn, applyDeadline, start, end }));
               setBusy("");
               if (!id) return;
               toast.success(`${id} taslak olarak kaydedildi`);
@@ -579,5 +624,154 @@ function CreateBody({ onOpenChange, bank, onCreated }: { onOpenChange: (o: boole
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Kurulan takımlar: üyeyi başka takıma taşı, yedeğe çıkar, yedekten takıma al. Değerlendirme başlayınca kilitli. */
+function TeamsDialog({ comp, data, onClose, onChanged }: { comp: AdminCompetition; data: AdminTeams; onClose: () => void; onChanged: () => Promise<void> }) {
+  const act = useAct();
+  const [busy, setBusy] = useState("");
+
+  const move = async (username: string, teamId: string | null) => {
+    setBusy(username);
+    const ok = await act(moveTeamMember({ competitionId: comp.id, username, teamId }));
+    setBusy("");
+    if (ok) {
+      toast.success(teamId ? "Takıma alındı" : "Yedeğe alındı");
+      await onChanged();
+    }
+  };
+
+  const Mover = ({ username, current }: { username: string; current: string | null }) => (
+    <select
+      disabled={!data.editable || busy === username}
+      value={current ?? ""}
+      onChange={(e) => move(username, e.target.value || null)}
+      className={cn(inputClass, "h-9 w-40 rounded-full text-sm")}
+      aria-label="Takımı değiştir"
+    >
+      {data.teams.map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
+      ))}
+      <option value="">Yedek</option>
+    </select>
+  );
+
+  return (
+    <Modal
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={`${comp.code} takımları`}
+      description={!data.editable ? `Durum: ${data.status}. Takımlar sadece yarışma devam ederken düzenlenebilir.` : "Üyeyi başka takıma taşıyabilir, yedeğe çıkarabilir ya da yedekten takıma alabilirsin. Kişiye bildirim gider."}
+      className="sm:max-w-3xl"
+    >
+      <div className="grid max-h-[65vh] gap-4 overflow-y-auto">
+          {data.teams.map((t) => {
+            const missing = data.positions.filter((f) => !t.members.some((m) => m.field === f));
+            return (
+              <div key={t.id} className="rounded-2xl border p-4">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <b>{t.name}</b>
+                  <span className="text-xs text-muted-foreground">{t.members.length} kişi</span>
+                  {missing.length > 0 && <Pill tone="warn">Eksik: {missing.join(", ")}</Pill>}
+                </div>
+                <ul className="divide-y">
+                  {t.members.map((m) => (
+                    <li key={m.username} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                      <span>
+                        <Link href={`/u/${m.username}`} className="font-semibold hover:underline">
+                          {m.name}
+                        </Link>{" "}
+                        <span className="text-muted-foreground">· {m.field}</span>
+                      </span>
+                      <Mover username={m.username} current={t.id} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+          <div className="rounded-2xl border border-dashed p-4">
+            <b className="mb-2 block">Yedekler ({data.substitutes.length})</b>
+            {data.substitutes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Yedek yok.</p>
+            ) : (
+              <ul className="divide-y">
+                {data.substitutes.map((m) => (
+                  <li key={m.username} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                    <span>
+                      <Link href={`/u/${m.username}`} className="font-semibold hover:underline">
+                        {m.name}
+                      </Link>{" "}
+                      <span className="text-muted-foreground">· {m.field}</span>
+                    </span>
+                    <Mover username={m.username} current={null} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Kullanıcının ligini elle değiştirme. Puanlara dokunmaz. */
+function LeagueTool() {
+  const act = useAct();
+  const [q, setQ] = useState("");
+  const [user, setUser] = useState<{ username: string; name: string; league: Level; season_points: number; score: number } | null>(null);
+  const [league, setLeague] = useState<Level>("Yeni başlayan");
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <Section title="Kullanıcının ligi">
+      <p className="mb-3 text-sm text-muted-foreground">Yanlış ligde kalan biri için. Puanlar değişmez; sezon sonu kuralı yeni liginden devam eder.</p>
+      <form
+        className="flex flex-wrap gap-2"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          const r = await act(findUserAction(q));
+          setBusy(false);
+          setUser(r);
+          if (r) setLeague(r.league);
+        }}
+      >
+        <input className={cn(inputClass, "h-10 w-56 rounded-full")} value={q} onChange={(e) => setQ(e.target.value)} placeholder="kullanıcı adı" />
+        <button disabled={busy || q.trim().length < 3} className={btn("outline", "sm", "h-10")}>
+          <Search /> Bul
+        </button>
+      </form>
+      {user && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-muted/60 p-4 text-sm">
+          <span>
+            <b>{user.name}</b> <span className="text-muted-foreground">@{user.username} · şu an {user.league} · sezon {user.season_points} · toplam {user.score}</span>
+          </span>
+          <select className={cn(inputClass, "h-9 w-44 rounded-full text-sm")} value={league} onChange={(e) => setLeague(e.target.value as Level)} aria-label="Yeni lig">
+            {LEVELS.map((l) => (
+              <option key={l}>{l}</option>
+            ))}
+          </select>
+          <button
+            disabled={busy || league === user.league}
+            onClick={async () => {
+              setBusy(true);
+              const ok = await act(setLeagueAction({ username: user.username, league }));
+              setBusy(false);
+              if (ok) {
+                toast.success(`${user.name} artık ${league} liginde`);
+                setUser({ ...user, league });
+              }
+            }}
+            className={btn("primary", "sm")}
+          >
+            Ligi değiştir
+          </button>
+        </div>
+      )}
+    </Section>
   );
 }

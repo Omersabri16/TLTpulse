@@ -1,27 +1,20 @@
 "use client";
 
-import { Check, Database, FileUp, Layout, Server, Smartphone, Workflow } from "lucide-react";
+import { Check, FileUp } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { acceptKvkk } from "@/app/actions/account";
 import { CvUploadDialog } from "@/components/cv-upload-dialog";
+import { FieldPicker } from "@/components/field-picker";
 import { KvkkConsent } from "@/components/kvkk-consent";
 import { Container, PageHero, PageShell } from "@/components/page-shell";
 import { TagInput } from "@/components/tag-input";
 import { btn, inputClass } from "@/lib/btn";
 import { saveProfile } from "@/app/actions/profile";
 import { useAct, useApp } from "@/lib/store";
-import { FIELDS, type Field } from "@/lib/types";
+import { TARGET_SKILLS } from "@/lib/score";
+import type { Field } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-const FIELD_ICON = { Frontend: Layout, Backend: Server, Veritabanı: Database, Mobil: Smartphone, DevOps: Workflow };
-const SKILLS: Record<Field, string[]> = {
-  Frontend: ["React", "TypeScript", "Next.js", "Tailwind", "Vue", "Test"],
-  Backend: ["Node.js", "Go", "Java", "PostgreSQL", "Docker", "Redis"],
-  Veritabanı: ["SQL", "PostgreSQL", "MySQL", "MongoDB", "Python"],
-  Mobil: ["Flutter", "Kotlin", "Swift", "React Native", "Firebase"],
-  DevOps: ["Docker", "Kubernetes", "GitHub Actions", "Terraform", "Linux"],
-};
 
 function Onboarding() {
   const profile = useApp((s) => s.profile)!;
@@ -112,23 +105,9 @@ function Onboarding() {
           {step === 0 && (
             <>
               <h2 className="text-xl font-semibold">Hangi alanda çalışıyorsun?</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Ligde bu alanla filtrelenirsin, yarışmalarda bu pozisyona başvurursun.</p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {FIELDS.map((f) => {
-                  const Icon = FIELD_ICON[f];
-                  return (
-                    <button
-                      key={f}
-                      onClick={() => setField(f)}
-                      className={cn("flex items-center gap-3 rounded-2xl border p-4 text-left transition", field === f ? "border-primary bg-secondary" : "hover:bg-muted")}
-                    >
-                      <span className={cn("grid size-10 place-items-center rounded-xl", field === f ? "bg-primary text-primary-foreground" : "bg-muted")}>
-                        <Icon className="size-5" />
-                      </span>
-                      <b className="font-semibold">{f}</b>
-                    </button>
-                  );
-                })}
+              <p className="mt-1 text-sm text-muted-foreground">Profilinde görünür, yol haritan ve yarışma pozisyonları buna göre önerilir. Sonra değiştirebilirsin.</p>
+              <div className="mt-6">
+                <FieldPicker value={field} onChange={setField} />
               </div>
             </>
           )}
@@ -164,7 +143,7 @@ function Onboarding() {
               </label>
               <div className="grid gap-1.5 text-sm font-medium">
                 Beceriler
-                <TagInput value={skills} onChange={setSkills} placeholder="Yaz ve Enter'a bas" suggestions={field ? SKILLS[field] : []} />
+                <TagInput value={skills} onChange={setSkills} placeholder="Yaz ve Enter'a bas" suggestions={field ? TARGET_SKILLS[field] : []} />
                 <span className="text-xs font-normal text-muted-foreground">Proje ekleyene kadar &quot;beyan&quot; olarak görünür.</span>
               </div>
               <div className="grid gap-1.5 text-sm font-medium">

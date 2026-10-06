@@ -8,9 +8,10 @@ import { createRoadmap } from "@/app/actions/roadmap";
 import { Card, Container, PageHero, PageShell, Pill } from "@/components/page-shell";
 import { Progress } from "@/components/ui/progress";
 import { btn, inputClass } from "@/lib/btn";
-import { completeness, MIN_SEASON_POINTS, PROMOTION_TOP, ROADMAP_MIN } from "@/lib/score";
+import { completeness, MIN_SEASON_POINTS, promotionCount, ROADMAP_MIN } from "@/lib/score";
 import { useAct, useApp, useMyScore } from "@/lib/store";
-import { FIELDS, type Field } from "@/lib/types";
+import { FieldSelect } from "@/components/field-picker";
+import type { Field } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const STAGES = ["Profilin okunuyor", "Projelerin ve kanıtların inceleniyor", "Hedef pozisyonla karşılaştırılıyor", "Adımlar hazırlanıyor"];
@@ -95,11 +96,7 @@ function Roadmap() {
                 Hedef pozisyonunu seç. AI projelerine, becerilerine ve kanıtlarına bakıp eksiklerini bulur, sıradaki adımlarını puanlarıyla çıkarır.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <select className={cn(inputClass, "rounded-full sm:w-52")} value={target} onChange={(e) => setTarget(e.target.value as Field)} aria-label="Hedef pozisyon">
-                  {FIELDS.map((f) => (
-                    <option key={f}>{f}</option>
-                  ))}
-                </select>
+                <FieldSelect className={cn(inputClass, "rounded-full sm:w-60")} value={target} onChange={setTarget} label="Hedef pozisyon" />
                 <button onClick={start} className={btn("primary", "md", "h-11")}>
                   <Sparkles /> Yol haritamı oluştur
                 </button>
@@ -126,11 +123,7 @@ function Roadmap() {
               <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-lg font-semibold">Hedef pozisyonun: {roadmap.target}</h2>
                 <div className="flex gap-2">
-                  <select className={cn(inputClass, "h-10 rounded-full sm:w-40")} value={target} onChange={(e) => setTarget(e.target.value as Field)} aria-label="Hedef pozisyon">
-                    {FIELDS.map((f) => (
-                      <option key={f}>{f}</option>
-                    ))}
-                  </select>
+                  <FieldSelect className={cn(inputClass, "h-10 rounded-full sm:w-52")} value={target} onChange={setTarget} label="Hedef pozisyon" />
                   <button onClick={start} className={btn("outline")}>
                     <RefreshCw /> Yeniden oluştur
                   </button>
@@ -156,7 +149,8 @@ function Roadmap() {
                         <div className="flex items-start justify-between gap-3">
                           <span className="text-[11px] tracking-wider text-muted-foreground uppercase">{done ? "Tamamlandı" : current ? "Sıradaki adım" : "Sonra"}</span>
                           <Pill tone={done ? "ok" : "lav"}>
-                            {done && <Check className="size-3" />}+{s.points} puan
+                            {done && <Check className="size-3" />}
+                            {s.points ? `+${s.points} puan` : "Puanı daha önce alındı"}
                           </Pill>
                         </div>
                         <h3 className="mt-2 text-lg font-semibold">{s.title}</h3>
@@ -184,7 +178,7 @@ function Roadmap() {
               {score.level === "Kıdemli" ? "Sezon şampiyonluğu." : `${nextLevel} lig.`}
             </h2>
             <p className="mt-3 text-sm text-on-navy-muted">
-              Sezonu ligindeki ilk {PROMOTION_TOP} içinde ve en az {goal} puanla bitir.
+              Sezonu ligindeki ilk %20 içinde (şu an ilk {promotionCount(score.rank.of)} kişi) ve en az {goal} puanla bitir.
             </p>
             <div className="mt-6 flex items-center gap-3">
               <Progress value={Math.min(100, (score.season / goal) * 100)} className="flex-1" />
@@ -194,7 +188,7 @@ function Roadmap() {
             </div>
             <p className="mt-3 text-sm text-on-navy-muted">
               {score.season < goal ? `${goal - score.season} puan kaldı · ` : ""}
-              Sıran: {score.rank.rank}. {score.rank.rank <= PROMOTION_TOP ? "(çizginin üstünde)" : `(çizgi ${PROMOTION_TOP}.)`}
+              Sıran: {score.rank.rank}. {score.rank.rank <= promotionCount(score.rank.of) ? "(çizginin üstünde)" : `(çizgi ${promotionCount(score.rank.of)}.)`}
             </p>
             <Link href="/lig" className="mt-6 inline-block text-sm font-semibold text-cyan hover:underline">
               Ligimi gör ↗

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, LogOut, Menu, MessageSquare, Gauge, ShieldCheck, UserRound, Wrench } from "lucide-react";
+import { Bell, LogOut, Menu, MessageSquare, Gauge, ShieldCheck, UserRound, Wrench, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -37,6 +37,7 @@ export function SiteHeader() {
   const session = useApp((s) => s.session);
   const profile = useApp((s) => s.profile);
   const isAdmin = useApp((s) => s.isAdmin);
+  const incoming = useApp((s) => s.connectionRequests.incoming.length);
   const notifications = useApp((s) => s.notifications);
   const markAllRead = useApp((s) => s.markAllRead);
   const act = useAct();
@@ -119,6 +120,10 @@ export function SiteHeader() {
                   <DropdownMenuItem onClick={() => router.push("/profil")}>
                     <UserRound /> Profilim
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push("/baglantilar")}>
+                    <Users /> Bağlantılarım
+                    {incoming > 0 && <span className="ml-auto rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">{incoming}</span>}
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push("/puan")}>
                     <Gauge /> Puanım
                   </DropdownMenuItem>
@@ -176,6 +181,9 @@ export function SiteHeader() {
                   <>
                     <Link href="/mesajlar" onClick={() => setOpen(false)} className="rounded-xl px-4 py-3 text-sm hover:bg-muted">
                       Mesajlar
+                    </Link>
+                    <Link href="/baglantilar" onClick={() => setOpen(false)} className="rounded-xl px-4 py-3 text-sm hover:bg-muted">
+                      Bağlantılarım{incoming > 0 && ` (${incoming} yeni istek)`}
                     </Link>
                     <Link href="/puan" onClick={() => setOpen(false)} className="rounded-xl px-4 py-3 text-sm hover:bg-muted">
                       Puanım

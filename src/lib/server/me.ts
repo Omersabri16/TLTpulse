@@ -18,6 +18,7 @@ import type {
   ScoreSource,
 } from "@/lib/types";
 import { db } from "./admin";
+import { shareInfo } from "./share";
 import {
   APPROVAL_COLS,
   PROFILE_COLS,
@@ -61,6 +62,8 @@ export const EMPTY_ME: MeData = {
   isAdmin: false,
   kvkkAccepted: false,
   blocked: [],
+  connectionRequests: { incoming: [], outgoing: [] },
+  achievement: null,
 };
 
 function check(res: { error: { message: string } | null }, what: string) {
@@ -158,11 +161,13 @@ export async function syncScore(userId: string): Promise<MeScore> {
   const items = scoreItems({
     projects: projectList.map((x) => ({ id: x.id, name: x.name, points: x.analysis.points, status: x.status })),
     certs: certRows.map((c) => ({ id: c.id, name: c.name, provider: c.provider, points: c.points })),
-    approvals: approvalRows.map((a) => ({ id: a.id, label: a.target_label, approverName: a.approver_name, status: a.status, points: a.points })),
+    approvals: approvalRows.map((a) => ({ id: a.id, targetId: a.target_id, answeredAt: a.answered_at, label: a.target_label, approverName: a.approver_name, status: a.status, points: a.points })),
     competitions: completed.map((c) => ({ id: c.id, code: c.code, title: c.title, points: t.mine.find((m) => m.competition_id === c.id)?.points ?? 0 })),
     peer: [...byComp].filter(([cid]) => compById.get(cid)?.status === "Tamamlandı").map(([cid, list]) => ({ competitionId: cid, code: compById.get(cid)!.code, stars: list.map((x) => x.stars) })),
     mentor,
-    roadmap: rm ? rm.steps.filter((s) => roadmapDone.includes(s.id)).map((s) => ({ ref: `roadmap:${rm.generatedAt}:${s.id}`, label: `Yol haritası: ${s.title}`, points: s.points })) : [],
+    // Anahtar adımın türü: her tür (proje ekle, hakkında yaz...) kullanıcı başına bir kez puan verir. Yol haritasını
+    // yenileyip (ya da hedefi değiştirip) aynı adımı yeniden tamamlamak puan getirmez.
+    roadmap: rm ? rm.steps.filter((s) => roadmapDone.includes(s.id)).map((s) => ({ ref: `roadmap:${s.check}`, label: `Yol haritası: ${s.title}`, points: s.points })) : [],
   });
 
   check(await db().rpc("apply_score_items", { p_user: userId, p_items: items }), "puan defteri");
@@ -198,7 +203,7 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
   const p = must(profRes, "profil") as ProfileRow | null;
   if (!p) return EMPTY_ME;
 
-  const [exps, conns, projects, certs, approvals, peerIn, peerOut, events, apps, roadmap, t, convs, notes, score, season, badges, creds, result, blocks] = await Promise.all([
+  const [exps, conns, projects, certs, approvals, peerIn, peerOut, events, apps, roadmap, t, convs, notes, score, season, badges, creds, result, blocks, creqs] = await Promise.all([
     db().from("experiences").select("id, kind, title, org, start_label, end_label, description").eq("user_id", userId).order("created_at", { ascending: false }),
     db().from("connections").select("other_id").eq("user_id", userId),
     db().from("projects").select(PROJECT_COLS).eq("user_id", userId).order("created_at", { ascending: false }),
@@ -218,6 +223,7 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
     db().from("credentials").select("id, kind, title, status, url").eq("user_id", userId).order("created_at", { ascending: false }),
     db().from("season_results").select("season_id, from_league, to_league, champion").eq("user_id", userId).eq("seen", false).order("season_id", { ascending: false }).limit(1).maybeSingle(),
     db().from("blocks").select("blocked_id").eq("user_id", userId),
+    db().from("connection_requests").select("from_id, to_id").or(`from_id.eq.${userId},to_id.eq.${userId}`).order("created_at", { ascending: false }),
   ]);
 
   const conversations = must(convs, "sohbet") as { id: string; user_a: string; user_b: string }[];
@@ -240,11 +246,13 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
   const messages = must(msgs, "mesaj") as Msg[];
   const tmessages = must(teamMsgs, "takım mesajı") as TMsg[];
   const blockedIds = (must(blocks, "engel") as { blocked_id: string }[]).map((b) => b.blocked_id);
+  const reqs = must(creqs, "bağlantı isteği") as { from_id: string; to_id: string }[];
 
   // Adı geçen herkesin kullanıcı adı ve alanı tek sorguda.
   const ids = new Set<string>([
     ...connIds,
     ...blockedIds,
+    ...reqs.flatMap((r) => [r.from_id, r.to_id]),
     ...pout.map((x) => x.to_user),
     ...conversations.flatMap((c) => [c.user_a, c.user_b]),
     ...tmessages.flatMap((m) => (m.user_id ? [m.user_id] : [])),
@@ -340,6 +348,11 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
     isAdmin: p.is_admin,
     kvkkAccepted: !!p.kvkk_accepted_at,
     blocked: blockedIds.map(uname),
+    achievement: await shareInfo(p.username).then((s) => (s?.achieved ? { headline: s.headline, sub: s.sub } : null)),
+    connectionRequests: {
+      incoming: reqs.filter((r) => r.to_id === userId).map((r) => uname(r.from_id)),
+      outgoing: reqs.filter((r) => r.from_id === userId).map((r) => uname(r.to_id)),
+    },
   };
 }
 

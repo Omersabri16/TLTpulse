@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { TEAM_FIELDS } from "@/lib/score";
 import { bankSpec } from "@/lib/spec-bank";
-import { check, run, text, UserError } from "@/lib/server/action";
+import { check, FIELD, run, text, UserError } from "@/lib/server/action";
 import { db } from "@/lib/server/admin";
 import { draftSpec, generateTests } from "@/lib/server/ai-spec";
 import { requireAdmin } from "@/lib/server/auth";
@@ -13,10 +13,11 @@ import { dispatchRun, EvalError, pushTestFile } from "@/lib/server/evaluation";
 import { QuotaError } from "@/lib/server/gemini";
 import { notify } from "@/lib/server/notify";
 import { closeSeason, openSeason } from "@/lib/server/season";
-import type { CompetitionSpec } from "@/lib/types";
+import { LEVELS, type CompetitionSpec, type Field, type Level } from "@/lib/types";
 
 // Yönetici (kararlar.md Bölüm 5, "Yönetici"): yarışmayı tanımlar, sıraya koyar, iptal eder, şikayetlere bakar.
-// Puana ve sonuca dokunamaz, takımı elle kuramaz (takımları kod kurar). Her aksiyon requireAdmin ile başlar.
+// 6 Ekim 2026 akşam: kurulan takımları düzenleyebilir (üye taşıma, yedekle değiştirme) ve kullanıcının ligini değiştirebilir.
+// Puana ve yarışma sonucuna dokunamaz; takımları ilk kez yine kod kurar. Her aksiyon requireAdmin ile başlar.
 
 const CompId = z.string().regex(/^y-[0-9]{2,4}$/, "Geçersiz yarışma.");
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tarih YYYY-AA-GG olmalı.");
@@ -39,11 +40,13 @@ const CreateInput = z
     difficulty: DIFF,
     specId: z.string().regex(/^[a-z0-9-]{3,40}$/).optional(),
     spec: SpecSchema.optional(),
+    positions: z.array(FIELD).min(2, "En az 2 pozisyon seç.").max(5, "En fazla 5 pozisyon.").optional(),
     publishOn: Day,
     applyDeadline: Day,
     start: Day,
     end: Day,
   })
+  .refine((v) => !v.positions || new Set(v.positions).size === v.positions.length, "Aynı pozisyon iki kez seçilemez.")
   .refine((v) => v.publishOn <= v.applyDeadline && v.applyDeadline < v.start && v.start < v.end, "Tarih sırası: yayın ≤ son başvuru < başlangıç < teslim.")
   .refine((v) => v.specId || v.spec, "Bankadan bir şartname seç ya da taslak oluştur.");
 
@@ -74,7 +77,7 @@ export async function createCompetition(input: z.input<typeof CreateInput>) {
           description: spec.problem,
           brief: spec.stories,
           deliverables: ["Herkese açık GitHub reposu (yarışma başladıktan sonra açılmış)", "Canlı demo linki (https)", "Şartnamedeki API uçları ve data-testid adları"],
-          positions: TEAM_FIELDS[v.difficulty].map((field) => ({ field, perTeam: 1 })),
+          positions: (v.positions ?? bank?.positions ?? TEAM_FIELDS[v.difficulty]).map((field) => ({ field, perTeam: 1 })),
           difficulty: v.difficulty,
           spec_id: bank?.id ?? null,
           spec,
@@ -282,6 +285,126 @@ export async function setSuspended(input: z.input<typeof SuspendInput>) {
     if (p.id === admin.id || p.is_admin) throw new UserError("Yönetici askıya alınamaz.");
     check(await db().from("profiles").update({ suspended: v.on }).eq("id", p.id), "askıya alma");
     if (v.on) await db().from("reports").update({ status: "Kapatıldı" }).eq("target_user", p.id).eq("status", "Açık");
+    return true;
+  });
+}
+
+// ---------- Takımları düzenleme ----------
+
+export interface AdminTeams {
+  status: string;
+  editable: boolean;
+  positions: Field[];
+  teams: { id: string; name: string; members: { username: string; name: string; field: Field }[] }[];
+  substitutes: { username: string; name: string; field: Field }[];
+}
+
+/** Takımlar sadece "Devam ediyor"da düzenlenir: değerlendirme başlayınca (commit'ler dondurulunca) sonuç bozulmasın diye kilitlenir. */
+export async function adminTeamsAction(id: string) {
+  return run(async (): Promise<AdminTeams> => {
+    await requireAdmin();
+    const c = await getComp(CompId.parse(id));
+    if (!c) throw new UserError("Yarışma bulunamadı.");
+    const [teams, members, apps] = await Promise.all([
+      db().from("teams").select("id, name").eq("competition_id", c.id).order("name"),
+      db().from("team_members").select("team_id, user_id, field").eq("competition_id", c.id),
+      db().from("applications").select("user_id, field").eq("competition_id", c.id),
+    ]);
+    const mem = (members.data ?? []) as { team_id: string; user_id: string; field: Field }[];
+    const subs = ((apps.data ?? []) as { user_id: string; field: Field }[]).filter((a) => !mem.some((m) => m.user_id === a.user_id));
+    const ids = [...new Set([...mem.map((m) => m.user_id), ...subs.map((a) => a.user_id)])];
+    const people = new Map(
+      ids.length ? (((await db().from("profiles").select("id, username, name").in("id", ids)).data ?? []) as { id: string; username: string; name: string }[]).map((p) => [p.id, p]) : [],
+    );
+    const who = (uid: string) => people.get(uid) ?? { username: "silinmis", name: "Silinmiş kullanıcı" };
+    return {
+      status: c.status,
+      editable: c.status === "Devam ediyor",
+      positions: c.positions.map((p) => p.field),
+      teams: ((teams.data ?? []) as { id: string; name: string }[]).map((t) => ({
+        id: t.id,
+        name: t.name,
+        members: mem.filter((m) => m.team_id === t.id).map((m) => ({ username: who(m.user_id).username, name: who(m.user_id).name, field: m.field })),
+      })),
+      substitutes: subs.map((a) => ({ username: who(a.user_id).username, name: who(a.user_id).name, field: a.field })),
+    };
+  });
+}
+
+const MoveInput = z.object({
+  competitionId: CompId,
+  username: z.string().regex(/^[a-z0-9_-]{3,30}$/),
+  teamId: z.string().regex(/^t-[a-z0-9-]{3,40}$/).nullable(),
+  field: FIELD.optional(),
+});
+
+/** Üyeyi başka takıma taşır, yedekten takıma alır ya da takımdan yedeğe çıkarır. Pozisyon verilmezse şu anki ya da başvurduğu pozisyon. */
+export async function moveTeamMember(input: z.input<typeof MoveInput>) {
+  return run(async () => {
+    await requireAdmin();
+    const v = MoveInput.parse(input);
+    const c = await getComp(v.competitionId);
+    if (!c || c.status !== "Devam ediyor") throw new UserError("Takımlar sadece yarışma devam ederken düzenlenir (değerlendirme başlayınca kilitlenir).");
+    const u = (await db().from("profiles").select("id").eq("username", v.username).maybeSingle()).data as { id: string } | null;
+    if (!u) throw new UserError("Kullanıcı bulunamadı.");
+    const app = (await db().from("applications").select("field").eq("competition_id", c.id).eq("user_id", u.id).maybeSingle()).data as { field: Field } | null;
+    const cur = (await db().from("team_members").select("team_id, field").eq("competition_id", c.id).eq("user_id", u.id).maybeSingle()).data as { team_id: string; field: Field } | null;
+    if (!app && !cur) throw new UserError("Bu kişi bu yarışmaya başvurmamış.");
+    const field = v.field ?? cur?.field ?? app!.field;
+    if (!c.positions.some((p) => p.field === field)) throw new UserError(`Bu yarışmada ${field} pozisyonu yok.`);
+
+    let target: { id: string; name: string } | null = null;
+    if (v.teamId) {
+      target = (await db().from("teams").select("id, name").eq("id", v.teamId).eq("competition_id", c.id).maybeSingle()).data as { id: string; name: string } | null;
+      if (!target) throw new UserError("Takım bulunamadı.");
+      if (cur?.team_id === target.id && cur.field === field) return true;
+    } else if (!cur) return true;
+
+    if (cur) check(await db().from("team_members").delete().eq("competition_id", c.id).eq("user_id", u.id), "takım üyesi");
+    if (target) {
+      check(await db().from("team_members").insert({ team_id: target.id, competition_id: c.id, user_id: u.id, field }), "takım üyesi");
+      if (app) await db().from("applications").update({ status: "Takımda" }).eq("competition_id", c.id).eq("user_id", u.id);
+      await notify(u.id, `${c.code}: yönetici seni ${target.name} takımına aldı (${field}).`, `/takim/${target.id}`);
+    } else {
+      if (app) await db().from("applications").update({ status: "Yedek" }).eq("competition_id", c.id).eq("user_id", u.id);
+      await notify(u.id, `${c.code}: yönetici seni takımdan yedek listesine aldı.`, `/yarismalar/${c.id}`);
+    }
+    return true;
+  });
+}
+
+// ---------- Kullanıcının ligi ----------
+
+const Uname = z.string().trim().toLowerCase().regex(/^[a-z0-9_-]{3,30}$/, "Geçersiz kullanıcı adı.");
+
+export async function findUserAction(username: string) {
+  return run(async () => {
+    await requireAdmin();
+    const p = (await db().from("profiles").select("username, name, league, season_points, score, suspended").eq("username", Uname.parse(username)).maybeSingle()).data as {
+      username: string;
+      name: string;
+      league: Level;
+      season_points: number;
+      score: number;
+      suspended: boolean;
+    } | null;
+    if (!p) throw new UserError("Kullanıcı bulunamadı.");
+    return p;
+  });
+}
+
+const LeagueInput = z.object({ username: Uname, league: z.enum(LEVELS as [Level, ...Level[]]) });
+
+/** Ligi elle değiştirir (ör. yanlış ligde kalmış deneyimli biri). Puanlara dokunmaz; sezon sonu kuralı yeni liginden devam eder. */
+export async function setLeagueAction(input: z.input<typeof LeagueInput>) {
+  return run(async () => {
+    await requireAdmin();
+    const v = LeagueInput.parse(input);
+    const p = (await db().from("profiles").select("id, league").eq("username", v.username).maybeSingle()).data as { id: string; league: Level } | null;
+    if (!p) throw new UserError("Kullanıcı bulunamadı.");
+    if (p.league === v.league) return true;
+    check(await db().from("profiles").update({ league: v.league }).eq("id", p.id), "lig");
+    await notify(p.id, `Yönetici ligini ${v.league} olarak değiştirdi.`, "/lig");
     return true;
   });
 }

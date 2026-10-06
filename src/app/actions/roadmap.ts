@@ -26,6 +26,11 @@ export async function createRoadmap(target: Field) {
     const ctx = { profile: me.profile, projects: me.projects, certs: me.certs, references: me.references, applications: me.applications, peerGivenCount: Object.keys(me.peerGiven).length };
     const rule = generateRoadmap(ctx, t, openComp);
     const ai = await aiRoadmap(ctx, t, openComp);
+    // Her adım türü kullanıcı başına bir kez puan verir (me.ts, `roadmap:<tür>`): puanı alınmış tür yeni haritada 0 görünür.
+    const paid = new Set(
+      ((check(await db().from("score_events").select("ref").eq("user_id", user.id).like("ref", "roadmap:%"), "puan defteri") ?? []) as { ref: string }[]).map((r) => r.ref),
+    );
+    const steps = (ai?.steps ?? rule.steps).map((s) => (paid.has(`roadmap:${s.check}`) ? { ...s, points: 0 } : s));
 
     check(
       await db()
@@ -35,7 +40,7 @@ export async function createRoadmap(target: Field) {
             user_id: user.id,
             target: t,
             summary: (ai?.summary ?? rule.summary).slice(0, 600),
-            steps: ai?.steps ?? rule.steps,
+            steps,
             baseline: rule.baseline,
             source: ai ? "ai" : "kural",
             generated_at: new Date().toISOString(),

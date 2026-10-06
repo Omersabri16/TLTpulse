@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { blockUser, unblockUser } from "@/app/actions/account";
-import { connect, startConversation } from "@/app/actions/profile";
-import { ProfileActionsOther, ProfileView, type ProfileData } from "@/components/profile-view";
+import { answerConnection, cancelConnection, connect, startConversation } from "@/app/actions/profile";
+import { ProfileActionsOther, ProfileView, type ConnectionState, type ProfileData } from "@/components/profile-view";
 import { ReportDialog, type ReportTarget } from "@/components/report-dialog";
 import { useAct, useApp, useMyScore } from "@/lib/store";
 
@@ -13,6 +13,7 @@ export function PublicProfile({ data }: { data: ProfileData }) {
   const session = useApp((s) => s.session);
   const profile = useApp((s) => s.profile);
   const blocked = useApp((s) => s.blocked);
+  const requests = useApp((s) => s.connectionRequests);
   const myScore = useMyScore();
   const act = useAct();
   const router = useRouter();
@@ -26,7 +27,13 @@ export function PublicProfile({ data }: { data: ProfileData }) {
   if (isMe) return null;
 
   const member = !!session;
-  const connected = !!profile?.connections.includes(data.username);
+  const connection: ConnectionState = profile?.connections.includes(data.username)
+    ? "connected"
+    : requests.incoming.includes(data.username)
+      ? "incoming"
+      : requests.outgoing.includes(data.username)
+        ? "outgoing"
+        : "none";
   const isBlocked = blocked.includes(data.username);
   const needLogin = () => {
     toast("Bunun için giriş yapmalısın.");
@@ -42,11 +49,17 @@ export function PublicProfile({ data }: { data: ProfileData }) {
         actions={
           <ProfileActionsOther
             username={data.username}
-            connected={connected}
+            connection={connection}
             blocked={isBlocked}
             onConnect={async () => {
               if (!member) return needLogin();
-              if (await act(connect(data.username))) toast.success(`${data.name} bağlantılarına eklendi`);
+              if (await act(connect(data.username))) toast.success("Bağlantı isteği gönderildi", { description: `${data.name} kabul edince bağlantın olur.` });
+            }}
+            onAnswer={async (accept) => {
+              if (await act(answerConnection(data.username, accept))) toast(accept ? `${data.name} ile bağlandınız` : "İstek reddedildi");
+            }}
+            onCancel={async () => {
+              if (await act(cancelConnection(data.username))) toast("İstek geri çekildi");
             }}
             onMessage={async () => {
               if (!member) return needLogin();

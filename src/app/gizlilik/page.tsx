@@ -65,7 +65,7 @@ export default function Page() {
                 <b>Şikayet ve engelleme:</b> şikayet ettiğin içerik ve sebebi, engellediğin kişiler.
               </li>
               <li>
-                <b>Mesajlar ve bildirimler:</b> diğer kullanıcılarla yazışmaların.
+                <b>Mesajlar, bağlantılar ve bildirimler:</b> diğer kullanıcılarla yazışmaların, bağlantıların ve gönderdiğin / aldığın bağlantı istekleri.
               </li>
               <li>
                 <b>Puan ve yol haritası:</b> puan geçmişin ve oluşturduğun yol haritaları.

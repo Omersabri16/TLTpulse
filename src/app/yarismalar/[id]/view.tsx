@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { applyCompetition, withdrawCompetition } from "@/app/actions/competitions";
 import { UserAvatar } from "@/components/brand";
 import { DifficultyBadge } from "@/components/competition-card";
+import { GithubVerify } from "@/components/github-verify";
 import { Modal } from "@/components/modal";
 import { Card, Container, PageHero, Pill } from "@/components/page-shell";
 import { PeerRatingDialog } from "@/components/peer-rating-dialog";
@@ -282,7 +283,13 @@ function OpenView({ c }: { c: Competition }) {
             <p className="rounded-2xl bg-warn-bg p-3 text-sm text-warn">Profilindeki alan {profile.field}. Farklı bir pozisyona da başvurabilirsin.</p>
           )}
           {profile && !profile.githubVerified && (
-            <p className="rounded-2xl bg-warn-bg p-3 text-sm text-warn">GitHub hesabın doğrulanmamış. Yarışma puanı commit&apos;lerinle hesaplanır; teslimden önce Profili düzenle → GitHub&apos;dan doğrula.</p>
+            <div className="grid gap-3">
+              <p className="rounded-2xl bg-warn-bg p-3 text-sm text-warn">
+                GitHub hesabın doğrulanmamış. Yarışma puanı commit&apos;lerinle hesaplanır; teslimden önce doğrula.
+                {!profile.github && " Önce Profili düzenle'den GitHub kullanıcı adını ekle."}
+              </p>
+              <GithubVerify />
+            </div>
           )}
           <label className="grid gap-1.5 text-sm font-medium">
             Takımına bir not (isteğe bağlı)

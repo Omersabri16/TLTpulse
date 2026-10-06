@@ -9,7 +9,7 @@ import { Field, Modal } from "@/components/modal";
 import { Pill } from "@/components/page-shell";
 import { btn, inputClass } from "@/lib/btn";
 import { celebrateIfAboveLine } from "@/lib/celebrate";
-import { DIFFICULTY_POINTS, IMPORTED_RATIO, MIN_COMMIT_DAYS, parseRepoUrl, QUALITY_RULES } from "@/lib/score";
+import { DIFFICULTY_POINTS, importPenalized, MIN_COMMIT_DAYS, parseRepoUrl, QUALITY_RULES } from "@/lib/score";
 import { isHttpUrl } from "@/lib/safe";
 import { useAct, useApp, useMyScore } from "@/lib/store";
 import type { ProjectAnalysis } from "@/lib/types";
@@ -30,7 +30,7 @@ export function AnalysisView({ analysis, repo, sha, pending = false }: { analysi
     ["Anlamlı README", a.checks.readme, QUALITY_RULES.readme],
     [`${MIN_COMMIT_DAYS}+ farklı günde commit (${a.commitDays} gün)`, a.checks.days, QUALITY_RULES.days],
   ] as const;
-  const imported = a.importedRatio > IMPORTED_RATIO;
+  const imported = !pending && importPenalized(a.difficulty, a.importedRatio);
   return (
     <div className="grid gap-5">
       {imported && (

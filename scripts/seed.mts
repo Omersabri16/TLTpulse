@@ -13,9 +13,9 @@ import {
   personalPoints,
   projectPoints,
   qualityLabel,
+  promotionCount,
   qualityPoints,
   scoreItems,
-  TEAM_FIELDS,
   teamPoints,
   type ScoreItem,
 } from "../src/lib/score.ts";
@@ -261,7 +261,7 @@ async function main() {
         description: bank.spec.problem,
         brief: bank.spec.stories,
         deliverables: ["Herkese açık GitHub reposu (yarışma başladıktan sonra açılmış)", "Canlı demo linki (https)", "Şartnamedeki API uçları ve data-testid adları"],
-        positions: TEAM_FIELDS[bank.difficulty].map((field) => ({ field, perTeam: 1 })),
+        positions: bank.positions.map((field) => ({ field, perTeam: 1 })),
         difficulty: bank.difficulty,
         spec_id: bank.id,
         spec: { ...bank.spec, hiddenCount: bank.hiddenCount },
@@ -482,7 +482,7 @@ async function main() {
     season_points: number;
   }[];
   const rank = orta.findIndex((x) => x.username === ME_USERNAME) + 1;
-  console.log(`Deniz: Orta lig ${rank}. / ${orta.length}, sezon puanı ${orta[rank - 1]?.season_points}; 20. sıradaki ${orta[19]?.season_points}.`);
+  console.log(`Deniz: Orta lig ${rank}. / ${orta.length}, sezon puanı ${orta[rank - 1]?.season_points}; yükselme çizgisi ${promotionCount(orta.length)}. sırada (${orta[promotionCount(orta.length) - 1]?.season_points}).`);
   console.log(`Seed tamam: ${people.length} kullanıcı, ${projectRows.length} proje, ${COMPETITIONS.length} yarışma.`);
 }
 

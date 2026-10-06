@@ -99,22 +99,82 @@ async function userIdOf(username: string) {
   return r.data as { id: string; name: string };
 }
 
+// Bağlantı iki taraflı: biri istek gönderir, öbürü kabul edince ikisi de birbirinin bağlantısı olur (connections'ta iki satır).
+async function link(a: string, b: string) {
+  check(
+    await db().from("connections").upsert(
+      [
+        { user_id: a, other_id: b },
+        { user_id: b, other_id: a },
+      ],
+      { onConflict: "user_id,other_id", ignoreDuplicates: true },
+    ),
+    "bağlantı",
+  );
+  await db().from("connection_requests").delete().or(`and(from_id.eq.${a},to_id.eq.${b}),and(from_id.eq.${b},to_id.eq.${a})`);
+}
+
+const myName = async (id: string) => check(await db().from("profiles").select("name, username").eq("id", id).single(), "profil") as { name: string; username: string };
+
+/** Bağlantı isteği gönderir. Karşı taraf sana zaten istek gönderdiyse doğrudan bağlanırsınız. */
 export async function connect(username: string) {
   return run(async () => {
     const user = await requireUser();
     const other = await userIdOf(username);
     if (other.id === user.id) throw new UserError("Kendinle bağlantı kuramazsın.");
     if (await blockedBetween(user.id, other.id)) throw new UserError("Bu kişiyle bağlantı kuramazsın.");
-    if (!(await allow(user.id, "connect", 100, 24))) throw new UserError("Bugün çok fazla bağlantı isteği gönderdin.");
-    await db().from("connections").upsert(
-      [
-        { user_id: user.id, other_id: other.id },
-        { user_id: other.id, other_id: user.id },
-      ],
-      { onConflict: "user_id,other_id", ignoreDuplicates: true },
-    );
-    const me = check(await db().from("profiles").select("name, username").eq("id", user.id).single(), "profil") as { name: string; username: string };
-    await notify(other.id, `${me.name} seninle bağlantı kurdu.`, `/u/${me.username}`);
+    const already = await db().from("connections").select("other_id").eq("user_id", user.id).eq("other_id", other.id).maybeSingle();
+    if (already.data) throw new UserError("Zaten bağlantınız var.");
+    const me = await myName(user.id);
+    const incoming = await db().from("connection_requests").select("from_id").eq("from_id", other.id).eq("to_id", user.id).maybeSingle();
+    if (incoming.data) {
+      await link(user.id, other.id);
+      await notify(other.id, `${me.name} bağlantı isteğini kabul etti.`, `/u/${me.username}`);
+      return loadMe(user.id, user.email);
+    }
+    if (!(await allow(user.id, "connect", 50, 24))) throw new UserError("Bugün çok fazla bağlantı isteği gönderdin.");
+    const ins = await db().from("connection_requests").upsert({ from_id: user.id, to_id: other.id }, { onConflict: "from_id,to_id", ignoreDuplicates: true }).select("from_id");
+    check(ins, "bağlantı isteği");
+    if (ins.data?.length) await notify(other.id, `${me.name} sana bağlantı isteği gönderdi.`, "/baglantilar");
+    return loadMe(user.id, user.email);
+  });
+}
+
+/** Gelen isteği kabul eder ya da reddeder. Reddedilen kişiye bildirim gitmez. */
+export async function answerConnection(username: string, accept: boolean) {
+  return run(async () => {
+    const user = await requireUser();
+    const other = await userIdOf(username);
+    const req = await db().from("connection_requests").select("from_id").eq("from_id", other.id).eq("to_id", user.id).maybeSingle();
+    if (!req.data) throw new UserError("Bu bağlantı isteği artık yok.");
+    if (accept) {
+      if (await blockedBetween(user.id, other.id)) throw new UserError("Bu kişiyle bağlantı kuramazsın.");
+      await link(user.id, other.id);
+      const me = await myName(user.id);
+      await notify(other.id, `${me.name} bağlantı isteğini kabul etti.`, `/u/${me.username}`);
+    } else {
+      check(await db().from("connection_requests").delete().eq("from_id", other.id).eq("to_id", user.id), "bağlantı isteği");
+    }
+    return loadMe(user.id, user.email);
+  });
+}
+
+/** Gönderdiğin isteği geri çeker. */
+export async function cancelConnection(username: string) {
+  return run(async () => {
+    const user = await requireUser();
+    const other = await userIdOf(username);
+    check(await db().from("connection_requests").delete().eq("from_id", user.id).eq("to_id", other.id), "bağlantı isteği");
+    return loadMe(user.id, user.email);
+  });
+}
+
+/** Bağlantıyı iki taraftan da kaldırır. */
+export async function removeConnection(username: string) {
+  return run(async () => {
+    const user = await requireUser();
+    const other = await userIdOf(username);
+    check(await db().from("connections").delete().or(`and(user_id.eq.${user.id},other_id.eq.${other.id}),and(user_id.eq.${other.id},other_id.eq.${user.id})`), "bağlantı");
     return loadMe(user.id, user.email);
   });
 }

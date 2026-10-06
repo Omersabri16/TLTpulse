@@ -102,7 +102,7 @@ async function main() {
   const page = await fetch(BASE + "/profil", { headers: { Cookie: cookieHeader() }, redirect: "manual" });
   expect("korumalı sayfa açılır", page.status === 200, String(page.status));
   // Korumalı sayfaları oturumla derlet ki aksiyon kimlikleri manifest'e girsin.
-  for (const p of ["/yarismalar/y-07", "/takim/x", "/mesajlar", "/yol-haritasi", "/projeler", "/puan", "/onboarding", "/hesap", "/yonetim"]) await fetch(BASE + p, { headers: { Cookie: cookieHeader() } });
+  for (const p of ["/yarismalar/y-07", "/takim/x", "/mesajlar", "/baglantilar", "/yol-haritasi", "/projeler", "/puan", "/onboarding", "/hesap", "/yonetim"]) await fetch(BASE + p, { headers: { Cookie: cookieHeader() } });
   walk(".next/dev/server/app");
   const yon = await fetch(BASE + "/yonetim", { headers: { Cookie: cookieHeader() }, redirect: "manual" });
   expect("yönetici olmayana /yonetim yok (404)", yon.status === 404, String(yon.status));
@@ -198,13 +198,19 @@ async function main() {
   cookies = saved;
   const after = (await call("refreshMe")).data;
   expect("onay puanı: kişisel e-posta 10 + yorum 5", after.score.season - me.score.season === 15, `${me.score.season} → ${after.score.season}`);
+  r = await call("requestApproval", { target: { type: "experience", id: exp.id }, approverName: "Başka Biri", approverEmail: "baska@firma.example.com", relation: "İşveren" });
+  expect("onaylanmış deneyime ikinci onay istenemez (tek onay)", !r.ok && /tek onay|zaten onay/i.test(r.error), r.error);
+  // Aynı hedefe ikinci bir onay (eski veri ya da yarış) puana eklenmez.
+  await admin.from("approvals").insert({ user_id: uid, target_type: "experience", target_id: exp.id, target_label: "Backend stajyeri · Test A.Ş.", approver_name: "İkinci", approver_email: "ikinci@firma.example.com", relation: "İşveren", token_hash: randomBytes(16).toString("hex"), expires_at: new Date(Date.now() + 86400_000).toISOString(), status: "Onaylandı", points: 30, answered_at: new Date().toISOString() });
+  const after2 = (await call("refreshMe")).data;
+  expect("aynı deneyimin ikinci onayı puan getirmez", after2.score.season === after.score.season, `${after.score.season} → ${after2.score.season}`);
 
   // --- Yarışma ---
   r = await call("applyCompetition", { competitionId: "y-07", field: "Backend", note: "test" });
   expect("açık yarışmaya başvuru (lig kısıtı yok)", r.ok && r.data.applications["y-07"] === "Backend", r.ok ? "" : r.error);
   r = await call("applyCompetition", { competitionId: "y-05", field: "Backend" });
   expect("biten yarışmaya başvurulamaz", !r.ok, r.error);
-  r = await call("applyCompetition", { competitionId: "y-07", field: "Mobil" });
+  r = await call("applyCompetition", { competitionId: "y-07", field: "Oyun Geliştirme" });
   expect("olmayan pozisyona başvurulamaz", !r.ok, r.error);
   r = await call("applyCompetition", { competitionId: "y-09", field: "Backend" });
   expect("sıradaki (yayınlanmamış) yarışmaya başvurulamaz", !r.ok, r.error);
@@ -230,6 +236,8 @@ async function main() {
   expect("normal kullanıcı değerlendirme başlatamaz", !r.ok && /yönetici/i.test(r.error), r.error);
   r = await call("closeSeasonNow", "SEZONU BİTİR");
   expect("normal kullanıcı sezonu bitiremez", !r.ok && /yönetici/i.test(r.error), r.error);
+  r = await call("setLeagueAction", { username: "denizkaya", league: "Kıdemli" });
+  expect("normal kullanıcı lig değiştiremez", !r.ok && /yönetici/i.test(r.error), r.error);
   await admin.from("profiles").update({ is_admin: true }).eq("id", uid);
   r = await call("createCompetition", { title: "E2E Kitap", tagline: "deneme", difficulty: "Kolay", specId: "kitap-listesi", publishOn: "2026-12-01", applyDeadline: "2026-12-05", start: "2026-12-07", end: "2026-12-20" });
   expect("yönetici taslak yarışma oluşturur", r.ok && /^y-\d+$/.test(r.data), r.ok ? r.data : r.error);
@@ -243,6 +251,25 @@ async function main() {
   r = await call("cancelCompetition", { id: draftId, reason: "e2e testi bitti" });
   expect("yönetici iptal eder", r.ok, r.ok ? "" : r.error);
   await admin.from("competitions").delete().eq("id", draftId);
+  // Yönetici: kullanıcının ligi ve takım düzenleme (Y-06 devam ediyor).
+  const testUser = (await admin.from("profiles").select("username, league").eq("id", uid).single()).data;
+  r = await call("setLeagueAction", { username: testUser.username, league: "Orta" });
+  expect("yönetici kullanıcının ligini değiştirir", r.ok && (await admin.from("profiles").select("league").eq("id", uid).single()).data.league === "Orta", r.ok ? "" : r.error);
+  await admin.from("profiles").update({ league: testUser.league }).eq("id", uid);
+  r = await call("adminTeamsAction", "y-06");
+  const t6 = r.ok ? r.data : null;
+  expect("yönetici takımları görür", t6?.editable && t6.teams.length >= 2, r.ok ? JSON.stringify(t6?.status) : r.error);
+  if (t6?.editable && t6.teams.length >= 2) {
+    const m = t6.teams[0].members[0];
+    r = await call("moveTeamMember", { competitionId: "y-06", username: m.username, teamId: null });
+    const subs = (await call("adminTeamsAction", "y-06")).data;
+    expect("üye yedeğe alındı", r.ok && subs.substitutes.some((x) => x.username === m.username), r.ok ? "" : r.error);
+    r = await call("moveTeamMember", { competitionId: "y-06", username: m.username, teamId: t6.teams[0].id });
+    const geri = (await call("adminTeamsAction", "y-06")).data;
+    expect("üye takımına geri alındı", r.ok && geri.teams[0].members.some((x) => x.username === m.username), r.ok ? "" : r.error);
+    r = await call("moveTeamMember", { competitionId: "y-05", username: m.username, teamId: null });
+    expect("biten yarışmada takım düzenlenemez", !r.ok, r.error);
+  }
   await admin.from("profiles").update({ is_admin: false }).eq("id", uid);
 
   // --- Sezon kuralları (yazmadan önizleme: seed verisiyle) ---
@@ -250,19 +277,21 @@ async function main() {
   const idOf = async (u) => (await admin.from("profiles").select("id").eq("username", u).single()).data?.id;
   const mv = async (u) => moves.get(await idOf(u));
   const deniz = await mv("denizkaya");
-  expect("Orta 21. (130 puan) yükselme çizgisinin altında: Orta'da kalır", deniz?.to_league === "Orta" && Number(deniz.rank) === 21, JSON.stringify(deniz));
+  expect("Orta 6. (130 puan) ilk %20'nin (5 kişi) altında: Orta'da kalır", deniz?.to_league === "Orta" && Number(deniz.rank) === 6, JSON.stringify(deniz));
   const ece = await mv("eceyilmaz");
   expect("Orta 1. (100+) Kıdemli'ye yükselir", ece?.to_league === "Kıdemli");
+  const derya = await mv("deryaak");
+  expect("Orta son %10'da ve 100 altı: Yeni başlayan'a düşer", derya?.to_league === "Yeni başlayan");
   const irem = await mv("irempolat");
-  expect("Orta son 20'de ve 100 altı: Yeni başlayan'a düşer", irem?.to_league === "Yeni başlayan");
+  expect("Orta 94 puan ama son %10'da değil: düşmez", irem?.to_league === "Orta");
   const hakan = await mv("hakanarslan");
-  expect("Kıdemli 100 altı: Orta'ya düşer", hakan?.to_league === "Orta");
+  expect("Kıdemli son %10 ve 100 altı: Orta'ya düşer", hakan?.to_league === "Orta");
   const burak = await mv("burakatan");
-  expect("Kıdemli ilk 20 (100+): sezon şampiyonu", burak?.champion === true && burak.to_league === "Kıdemli");
+  expect("Kıdemli ilk %20 (100+): sezon şampiyonu", burak?.champion === true && burak.to_league === "Kıdemli");
   const ayse = await mv("aysayildiz");
   expect("Yeni başlayan 96 puan: yükselmez (100 sınırı)", ayse?.to_league === "Yeni başlayan");
   const zehra = await mv("zehrakurt");
-  expect("Yeni başlayan ilk 20 (100+): Orta'ya yükselir", zehra?.to_league === "Orta");
+  expect("Yeni başlayan ilk %20 (100+): Orta'ya yükselir", zehra?.to_league === "Orta");
 
   // --- Engelle, şikayet, veri indirme ---
   r = await call("blockUser", "denizkaya");
@@ -295,7 +324,36 @@ async function main() {
 
   // --- Yol haritası ---
   r = await call("createRoadmap", "Backend");
-  expect("yol haritası oluştu, adım puanları 5–10", r.ok && r.data.me.roadmap?.steps.every((s) => s.points >= 5 && s.points <= 10), r.ok ? `ai=${r.data.ai}, ${r.data.me.roadmap.steps.length} adım` : r.error);
+  expect("yol haritası oluştu, adım puanları 5–10 (daha önce alınmışsa 0)", r.ok && r.data.me.roadmap?.steps.every((s) => s.points === 0 || (s.points >= 5 && s.points <= 10)), r.ok ? `ai=${r.data.ai}, ${r.data.me.roadmap.steps.length} adım` : r.error);
+  // Aynı adım türü yeni yol haritasında tekrar tamamlansa da bir kez puan verir (hedef değiştirip yeniden oluşturma açığı).
+  const aboutStep = { id: "s-1", check: "about", title: "Hakkında bölümünü genişlet", detail: "e2e", points: 5, action: { label: "Profili düzenle", href: "/profil" } };
+  const base0 = { projects: 0, testedProjects: 0, hardProjects: 0, applications: 0, certs: 0, references: 0, peerGiven: 0 };
+  await call("saveProfile", { about: "e2e ".repeat(40) });
+  await admin.from("roadmaps").update({ steps: [aboutStep], baseline: base0, generated_at: new Date(Date.now() - 1000).toISOString() }).eq("user_id", uid);
+  const rm1 = (await call("refreshMe")).data.score.total;
+  await admin.from("roadmaps").update({ target: "Frontend", steps: [aboutStep], baseline: base0, generated_at: new Date().toISOString() }).eq("user_id", uid);
+  const rm2 = (await call("refreshMe")).data.score.total;
+  expect("yol haritası yenilenince aynı adım ikinci kez puan vermez", rm2 === rm1, `${rm1} → ${rm2}`);
+  r = await call("createRoadmap", "Frontend");
+  expect("puanı alınmış adım yeni haritada 0 puan görünür", r.ok && r.data.me.roadmap.steps.filter((s) => s.check === "about").every((s) => s.points === 0), r.ok ? "" : r.error);
+
+  // --- Bağlantı istekleri ---
+  const denizId = (await admin.from("profiles").select("id").eq("username", "denizkaya").single()).data.id;
+  r = await call("connect", "ardademir");
+  expect("bağlantı isteği gönderildi (henüz bağlantı değil)", r.ok && r.data.connectionRequests.outgoing.includes("ardademir") && !r.data.profile.connections.includes("ardademir"), r.ok ? "" : r.error);
+  r = await call("cancelConnection", "ardademir");
+  expect("istek geri çekildi", r.ok && !r.data.connectionRequests.outgoing.includes("ardademir"), r.ok ? "" : r.error);
+  await admin.from("connection_requests").insert({ from_id: denizId, to_id: uid });
+  r = await call("refreshMe");
+  expect("gelen istek görünür", r.ok && r.data.connectionRequests.incoming.includes("denizkaya"));
+  r = await call("answerConnection", "denizkaya", true);
+  expect("istek kabul edilince iki taraf bağlanır", r.ok && r.data.profile.connections.includes("denizkaya"), r.ok ? "" : r.error);
+  const back = await admin.from("connections").select("other_id").eq("user_id", denizId).eq("other_id", uid);
+  expect("bağlantı karşı tarafta da var", back.data?.length === 1);
+  r = await call("answerConnection", "denizkaya", true);
+  expect("yanıtlanmış istek tekrar kabul edilemez", !r.ok, r.error);
+  r = await call("removeConnection", "denizkaya");
+  expect("bağlantı iki taraftan kalktı", r.ok && !r.data.profile.connections.includes("denizkaya") && ((await admin.from("connections").select("other_id").eq("user_id", denizId).eq("other_id", uid)).data ?? []).length === 0, r.ok ? "" : r.error);
 
   // --- Rozet ---
   const rozet = await fetch(`${BASE}/rozet/denizkaya`);

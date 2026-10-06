@@ -21,8 +21,13 @@ export const SOURCES: ScoreSource[] = ["Projeler", "Yarışmalar", "Akran puanı
 
 // ---------- Lig ve sezon (kararlar.md Bölüm 5, "Sezonlu lig") ----------
 
-/** Sezon sonunda her ligin ilk 20'si yükselir, Orta ve Kıdemli'nin son 20'si düşer. */
-export const PROMOTION_TOP = 20;
+/** Sezon sonunda her ligin ilk %20'si yükselir, Orta ve Kıdemli'nin son %10'u düşer (SQL: season_moves aynı kural). */
+export const PROMOTION_RATE = 0.2;
+export const RELEGATION_RATE = 0.1;
+/** Ligde n kişi varken yükselen sayısı (yukarı yuvarlanır: az kişili ligde de en az 1 kişi). */
+export const promotionCount = (n: number) => Math.ceil(n * PROMOTION_RATE);
+/** Düşen sayısı (aşağı yuvarlanır: 10 kişiden az ligde kimse düşmez). */
+export const relegationCount = (n: number) => Math.floor(n * RELEGATION_RATE);
 /** Yükselmek için sezonda en az bu kadar puan gerekir; bu puanı alan düşmez. */
 export const MIN_SEASON_POINTS = 100;
 
@@ -76,11 +81,14 @@ export function qualityPoints(s: Pick<ProjectSignals, "ci" | "demo" | "readme" |
 
 export const qualityLabel = (qp: number): Quality => (qp >= 20 ? "Çok iyi" : qp >= 10 ? "İyi" : "Zayıf");
 
-/** 0–100. İçe aktarılmış projede puan, sonradan yazılan kodun oranıyla çarpılır. */
+/** İçe aktarılmış kod kuralı sadece Zor projede geçerli (6 Ekim 2026: Kolay ve Orta'da kaldırıldı). */
+export const importPenalized = (difficulty: Difficulty, importedRatio: number) => difficulty === "Zor" && importedRatio > IMPORTED_RATIO;
+
+/** 0–100. İçe aktarılmış Zor projede puan, sonradan yazılan kodun oranıyla çarpılır. */
 export function projectPoints(s: ProjectSignals) {
   const qp = qualityPoints(s);
   const base = s.difficulty === "Kolay" ? DIFFICULTY_POINTS.Kolay : DIFFICULTY_POINTS[s.difficulty] + qp;
-  const factor = s.importedRatio > IMPORTED_RATIO ? 1 - s.importedRatio : 1;
+  const factor = importPenalized(s.difficulty, s.importedRatio) ? 1 - s.importedRatio : 1;
   return Math.round(base * factor);
 }
 
@@ -206,7 +214,7 @@ export function peerPoints(ratings: { stars: number; competitionId?: string }[])
 export interface ScoreItemsInput {
   projects: { id: string; name: string; points: number; status: string }[];
   certs: { id: string; name: string; provider: string; points: number }[];
-  approvals: { id: string; label: string; approverName: string; status: string; points: number }[];
+  approvals: { id: string; targetId?: string; answeredAt?: string | null; label: string; approverName: string; status: string; points: number }[];
   competitions: { id: string; code: string; title: string; points: number }[];
   peer: { competitionId: string; code: string; stars: number[] }[];
   mentor: { competitionId: string; code: string }[];
@@ -217,8 +225,11 @@ export function scoreItems(i: ScoreItemsInput): ScoreItem[] {
   return [
     ...i.projects.filter((p) => p.status === "hazır").map((p): ScoreItem => ({ ref: `project:${p.id}`, source: "Projeler", label: `${p.name} projesi`, points: p.points })),
     ...i.certs.map((c): ScoreItem => ({ ref: `cert:${c.id}`, source: "Sertifikalar", label: `${c.provider} · ${c.name}`, points: c.points })),
+    // Bir deneyim / projeye tek onay puan verir (ilk onaylanan); sonrakiler profilde görünür ama puan getirmez.
     ...i.approvals
       .filter((a) => a.status === "Onaylandı")
+      .sort((a, b) => (a.answeredAt ?? "").localeCompare(b.answeredAt ?? ""))
+      .filter((a, k, all) => !a.targetId || all.findIndex((x) => x.targetId === a.targetId) === k)
       .map((a): ScoreItem => ({ ref: `approval:${a.id}`, source: "Referanslar", label: `${a.approverName} onayladı: ${a.label}`, points: a.points })),
     ...i.competitions.map((c): ScoreItem => ({ ref: `comp:${c.id}`, source: "Yarışmalar", label: `${c.code} ${c.title}`, points: c.points })),
     ...i.peer.map((p): ScoreItem => ({ ref: `peer:${p.competitionId}`, source: "Akran puanı", label: `${p.code} takım arkadaşlarından`, points: peerPointsFor(p.stars) })),
@@ -314,9 +325,19 @@ export const ROADMAP_CHECKS = Object.keys(STEP_RULES) as RoadmapCheck[];
 export const TARGET_SKILLS: Record<Field, string[]> = {
   Frontend: ["React", "TypeScript", "Erişilebilirlik", "Next.js"],
   Backend: ["Node.js", "PostgreSQL", "Docker", "Redis"],
+  "Full Stack": ["React", "Node.js", "PostgreSQL", "TypeScript"],
   Veritabanı: ["SQL", "PostgreSQL", "İndeksleme", "Yedekleme"],
-  Mobil: ["Flutter", "Kotlin", "Swift", "Çevrimdışı veri"],
+  iOS: ["Swift", "SwiftUI", "Core Data", "XCTest"],
+  Android: ["Kotlin", "Jetpack Compose", "Room", "Coroutines"],
+  "Cross-Platform": ["Flutter", "Dart", "React Native", "Firebase"],
+  "Veri Bilimi": ["Python", "Pandas", "SQL", "İstatistik"],
+  "Yapay Zeka": ["Python", "PyTorch", "scikit-learn", "NLP"],
+  "Siber Güvenlik": ["OWASP", "Linux", "Ağ güvenliği", "Burp Suite"],
+  "Bulut Bilişim": ["AWS", "Azure", "Terraform", "Docker"],
   DevOps: ["Docker", "Kubernetes", "CI/CD", "Gözlemlenebilirlik"],
+  "Oyun Geliştirme": ["Unity", "C#", "Unreal Engine", "C++"],
+  "Gömülü / IoT": ["C", "C++", "Arduino", "MQTT"],
+  "Test / QA": ["Playwright", "Selenium", "Jest", "Test otomasyonu"],
 };
 
 export function roadmapBaseline(ctx: RoadmapContext): Roadmap["baseline"] {

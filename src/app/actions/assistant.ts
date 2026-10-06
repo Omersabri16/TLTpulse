@@ -30,7 +30,7 @@ Platform kuralları:
 - Sertifika: BTK Akademi 20, Credly 25, doğrulanamayan 5, isim uyuşmazsa 0.
 - Amir/hoca onayı: kurumsal e-posta 30, kişisel 10, yorum yazarsa +5. Profilde deneyimin yanındaki "Onay iste" ile.
 - Yol haritası adımı tamamlanınca 5-10 puan. Yol haritası profil %75 doluyken açılır.
-- Ligler: 6 aylık sezonlar. Herkes Yeni başlayan liginde başlar; lig puanı sadece o sezon kazanılan puandır. Sezon sonunda her ligin ilk 20'si (en az 100 puanla) bir üst lige çıkar; Orta ve Kıdemli'nin son 20'si (100'ün altındaysa) düşer. Kıdemli'nin ilk 20'si "Sezon şampiyonu" olur.
+- Ligler: 6 aylık sezonlar. Herkes Yeni başlayan liginde başlar; lig puanı sadece o sezon kazanılan puandır. Sezon sonunda her ligin ilk %20'si (en az 100 puanla) bir üst lige çıkar; Orta ve Kıdemli'nin son %10'u (100'ün altındaysa) düşer. Kıdemli'nin ilk %20'si "Sezon şampiyonu" olur. Lig atlayan başarısını Instagram ve X'te paylaşabilir.
 - Sayfalar: Profil, Projeler, Lig, Yarışmalar, Yol haritam, Puanım, Mesajlar.`;
 
 function context(me: MeData, open: { code: string; title: string; positions: { field: string }[] }[]) {

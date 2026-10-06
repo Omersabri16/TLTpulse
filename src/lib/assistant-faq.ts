@@ -30,7 +30,7 @@ const FAQ: { keys: string[]; answer: string }[] = [
   {
     keys: ["lig", "seviye", "kıdemli", "orta", "yeni başlayan", "sezon", "yüksel", "düş"],
     answer:
-      "Ligler 6 aylık sezonlarla işler. Herkes Yeni başlayan liginde başlar; sezon sonunda her ligin ilk 20'si (en az 100 puanla) bir üst lige çıkar, Orta ve Kıdemli'nin son 20'si (100'ün altındaysa) düşer. Her sezon lig puanı sıfırdan başlar, kanıtların kalıcıdır.",
+      "Ligler 6 aylık sezonlarla işler. Herkes Yeni başlayan liginde başlar; sezon sonunda her ligin ilk %20'si (en az 100 puanla) bir üst lige çıkar, Orta ve Kıdemli'nin son %10'u (100'ün altındaysa) düşer. Her sezon lig puanı sıfırdan başlar, kanıtların kalıcıdır.",
   },
   {
     keys: ["akran", "yıldız", "arkadaş", "puanla", "mentor"],

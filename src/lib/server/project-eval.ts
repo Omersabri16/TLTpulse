@@ -1,6 +1,6 @@
 import "server-only";
 
-import { COPY_RATIO, MIN_OWN_FILES, projectPoints, qualityLabel, qualityPoints, IMPORTED_RATIO, MIN_COMMIT_DAYS } from "@/lib/score";
+import { COPY_RATIO, MIN_OWN_FILES, projectPoints, qualityLabel, qualityPoints, importPenalized, MIN_COMMIT_DAYS } from "@/lib/score";
 import type { Difficulty, ProjectAnalysis } from "@/lib/types";
 import { db } from "./admin";
 import { classifyDifficulty } from "./ai-difficulty";
@@ -40,7 +40,7 @@ function summaryOf(d: Difficulty | null, a: Omit<ProjectAnalysis, "summary" | "p
   (a.checks.readme ? plus : minus).push("anlamlı README");
   (a.checks.days ? plus : minus).push(`${MIN_COMMIT_DAYS}+ günlük geliştirme`);
   const head = d ? `${a.ownFiles} kendi kaynak dosyası, ${a.commits} commit; AI zorluğu ${d.toLowerCase()} buldu.` : `${a.ownFiles} kendi kaynak dosyası, ${a.commits} commit; zorluk analizi bekliyor.`;
-  const imported = a.importedRatio > IMPORTED_RATIO ? ` Kodun %${Math.round(a.importedRatio * 100)}'i ilk commit'le gelmiş, puan sonradan yazılan kısmın oranıyla çarpıldı.` : "";
+  const imported = d && importPenalized(d, a.importedRatio) ? ` Kodun %${Math.round(a.importedRatio * 100)}'i ilk commit'le gelmiş, puan sonradan yazılan kısmın oranıyla çarpıldı.` : "";
   const quality = d === "Kolay" ? " Kolay projede kalite puana eklenmez." : (plus.length ? ` Artılar: ${plus.join(", ")}.` : "") + (minus.length ? ` Eksik: ${minus.join(", ")}.` : "");
   return head + imported + quality;
 }

@@ -2,8 +2,9 @@
 
 import { Award, BadgeCheck, Check, Clock, Copy, Crown, ExternalLink, Flag, GitBranch, GraduationCap, HeartHandshake, MapPin, MessageSquare, MoreHorizontal, Plus, Quote, ShieldOff, Trophy, UserPlus, X } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { PulseLine, UserAvatar } from "@/components/brand";
+import { Modal } from "@/components/modal";
 import { Card, Pill } from "@/components/page-shell";
 import { btn } from "@/lib/btn";
 import { safeHref } from "@/lib/safe";
@@ -78,6 +79,7 @@ export function ProfileView({
 }) {
   const approved = data.references.filter((r) => r.status === "Onaylandı");
   const refFor = (type: "experience" | "project", id: string) => data.references.find((r) => r.targetType === type && r.targetId === id);
+  const [showConnections, setShowConnections] = useState(false);
 
   return (
     <>
@@ -113,7 +115,15 @@ export function ProfileView({
                       <GitBranch className="size-4" /> github.com/{data.github}
                     </a>
                   )}
-                  <span>{data.connections.length} bağlantı</span>
+                  {own ? (
+                    <Link href="/baglantilar" className="hover:text-foreground hover:underline">
+                      {data.connections.length} bağlantı
+                    </Link>
+                  ) : (
+                    <button onClick={() => setShowConnections(true)} className="hover:text-foreground hover:underline">
+                      {data.connections.length} bağlantı
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -393,7 +403,7 @@ export function ProfileView({
 
             {sidebarTop}
 
-            {own && <ReadmeBadge username={data.username} />}
+            {own && <ReadmeBadge username={data.username} github={data.github} />}
 
             <Section title="Beceriler" empty="Henüz beceri eklenmedi.">
               {data.skills.length > 0 && (
@@ -422,7 +432,22 @@ export function ProfileView({
               )}
             </Section>
 
-            <Section title="Bağlantılar" empty="Henüz bağlantı yok. Takım arkadaşların burada görünür.">
+            <Section
+              title="Bağlantılar"
+              action={
+                data.connections.length > 0 &&
+                (own ? (
+                  <Link href="/baglantilar" className="text-sm font-semibold text-primary hover:underline">
+                    Tümü →
+                  </Link>
+                ) : (
+                  <button onClick={() => setShowConnections(true)} className="text-sm font-semibold text-primary hover:underline">
+                    Tümü →
+                  </button>
+                ))
+              }
+              empty="Henüz bağlantı yok."
+            >
               {data.connections.length > 0 && (
                 <ul className="grid gap-3">
                   {data.connections.slice(0, 6).map((c) => (
@@ -442,50 +467,82 @@ export function ProfileView({
           </aside>
         </div>
       </div>
+      <Modal open={showConnections} onOpenChange={setShowConnections} title={`${data.name} · bağlantılar`} description={`${data.connections.length} bağlantı`}>
+        <ul className="grid max-h-[60vh] gap-2 overflow-y-auto">
+          {data.connections.map((c) => (
+            <li key={c.username}>
+              <Link href={`/u/${c.username}`} onClick={() => setShowConnections(false)} className="flex items-center gap-3 rounded-2xl p-1.5 hover:bg-muted">
+                <UserAvatar name={c.name} />
+                <span className="text-sm">
+                  <b className="block font-semibold">{c.name}</b>
+                  <span className="text-muted-foreground">{c.field}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Modal>
     </>
   );
 }
 
 /** GitHub README'ye eklenecek canlı rozet (lig + sezon puanı). */
-function ReadmeBadge({ username }: { username: string }) {
+function ReadmeBadge({ username, github }: { username: string; github: string }) {
   const site = useIsClient() ? window.location.origin : "";
   const md = `[![TLTpulse](${site}/rozet/${username})](${site}/u/${username})`;
+  const copy = async (quiet = false) => {
+    try {
+      await navigator.clipboard.writeText(md);
+      toast.success("Markdown kopyalandı", { description: quiet ? "GitHub'da README.md'yi düzenle ve yapıştır." : "GitHub profilindeki README.md'ye yapıştır." });
+    } catch {
+      if (!quiet) toast.error("Kopyalanamadı");
+    }
+  };
   return (
     <Card>
       <h2 className="font-semibold">README rozeti</h2>
       <p className="mt-1 text-sm text-muted-foreground">GitHub profiline ekle; ligin ve sezon puanın canlı görünsün.</p>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={`/rozet/${username}`} alt="TLTpulse rozeti" className="mt-3 h-5" />
-      <button
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(md);
-            toast.success("Markdown kopyalandı", { description: "GitHub profilindeki README.md'ye yapıştır." });
-          } catch {
-            toast.error("Kopyalanamadı");
-          }
-        }}
-        className={btn("outline", "sm", "mt-3")}
-      >
-        <Copy /> Markdown&apos;ı kopyala
-      </button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button onClick={() => copy()} className={btn("outline", "sm")}>
+          <Copy /> Markdown&apos;ı kopyala
+        </button>
+        {github && (
+          // GitHub'da profil README'si, kullanıcı adıyla aynı adlı repodaki README.md. Tıklayınca Markdown da kopyalanır.
+          <a href={`https://github.com/${encodeURIComponent(github)}/${encodeURIComponent(github)}`} target="_blank" rel="noreferrer" onClick={() => copy(true)} className={btn("primary", "sm")}>
+            <GitBranch /> GitHub README&apos;ye git <ExternalLink />
+          </a>
+        )}
+      </div>
+      {github && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Repo açılmıyorsa GitHub&apos;da <b>{github}</b> adında herkese açık bir repo oluştur; README.md&apos;si profilinde görünür.
+        </p>
+      )}
     </Card>
   );
 }
 
+export type ConnectionState = "none" | "outgoing" | "incoming" | "connected";
+
 export function ProfileActionsOther({
   username,
-  connected,
+  connection,
   blocked,
   onConnect,
+  onAnswer,
+  onCancel,
   onMessage,
   onBlock,
   onReport,
 }: {
   username: string;
-  connected: boolean;
+  connection: ConnectionState;
   blocked?: boolean;
   onConnect: () => void;
+  onAnswer: (accept: boolean) => void;
+  onCancel: () => void;
   onMessage: () => void;
   onBlock?: () => void;
   onReport?: () => void;
@@ -495,17 +552,28 @@ export function ProfileActionsOther({
       <button onClick={onMessage} className={btn("primary")}>
         <MessageSquare /> Mesaj gönder
       </button>
-      <button onClick={onConnect} className={btn("outline")} disabled={connected}>
-        {connected ? (
-          <>
-            <Check /> Bağlantın
-          </>
-        ) : (
-          <>
-            <UserPlus /> Bağlantı kur
-          </>
-        )}
-      </button>
+      {connection === "connected" ? (
+        <Link href="/baglantilar" className={btn("outline")}>
+          <Check /> Bağlantın
+        </Link>
+      ) : connection === "outgoing" ? (
+        <button onClick={onCancel} className={btn("outline")} title="İsteği geri çek">
+          <Clock /> İstek gönderildi
+        </button>
+      ) : connection === "incoming" ? (
+        <>
+          <button onClick={() => onAnswer(true)} className={btn("lav")}>
+            <Check /> İsteği kabul et
+          </button>
+          <button onClick={() => onAnswer(false)} className={btn("ghost")}>
+            <X /> Reddet
+          </button>
+        </>
+      ) : (
+        <button onClick={onConnect} className={btn("outline")}>
+          <UserPlus /> Bağlantı kur
+        </button>
+      )}
       <Link href={`/u/${username}/cv`} className={btn("ghost")}>
         CV <ExternalLink />
       </Link>
