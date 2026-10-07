@@ -25,7 +25,7 @@ const FAQ: { keys: string[]; answer: string }[] = [
   {
     keys: ["sertifika", "btk", "credly", "coursera", "udemy"],
     answer:
-      "Profilinde \"Sertifika ekle\" ile linki yapıştır. BTK Akademi 20, Credly 25 puan; doğrulanamayan sertifika 5. Üzerindeki isim profilindekiyle uyuşmazsa puan verilmez.",
+      "Profilinde \"Sertifika ekle\" ile linki yapıştır. BTK Akademi ve Credly sertifikaları kaynaktan doğrulanır ve 20 puan getirir; üzerindeki isim profilindekiyle uyuşmazsa puan verilmez. Coursera, Udemy gibi diğer sertifikalar beyan olarak 5 puan; profilde \"Onay iste\" ile hocan ya da amirin onaylarsa 20 puan olur.",
   },
   {
     keys: ["lig", "seviye", "kıdemli", "orta", "yeni başlayan", "sezon", "yüksel", "düş"],

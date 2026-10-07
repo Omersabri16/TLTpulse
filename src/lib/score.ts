@@ -161,25 +161,75 @@ export const MENTOR_MIN_STARS = 4;
 
 // ---------- Sertifika doğrulama ----------
 
-/** Resmi kaynaktan doğrulanan BTK 20 / Credly 25; doğrulanamayan 5; isim uyuşmayan 0 (kararlar.md Bölüm 5). */
-export const CERT_POINTS = { "BTK Akademi": 20, Credly: 25, other: 5 } as const;
+/**
+ * Kaynaktan doğrulanan BTK / Credly 20; diğerleri beyan 5, bir kişi (hoca, amir) onaylarsa 20; isim uyuşmayan 0
+ * (kararlar.md Bölüm 5 ve 6). Doğrulama sunucuda: lib/server/cert-verify.ts.
+ */
+export const CERT_POINTS = { verified: 20, approved: 20, declared: 5 } as const;
+export const SOURCE_CHECKED: CertProvider[] = ["BTK Akademi", "Credly"];
+/** Eski kayıtlardaki "Doğrulanamadı" arayüzde "Beyan" gibi davranır. */
+export const isDeclared = (s: CertStatus) => s === "Beyan" || s === "Doğrulanamadı";
 
-/** Kural tabanlı kontrol (kararlar.md Bölüm 6). Resmi kaynaktan çekme ileride bunun yerini alacak. */
-export function verifyCertificate(provider: CertProvider, link: string, nameOnCert: string, profileName: string): { status: CertStatus; points: number } {
-  const norm = (s: string) =>
-    s.toLocaleLowerCase("tr").replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c").replace(/\s+/g, " ").trim();
-  let host = "";
+const normName = (s: string) =>
+  s
+    .toLocaleLowerCase("tr")
+    .replace(/ı/g, "i")
+    .replace(/ş/g, "s")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/** Profildeki ismin her kelimesi kaynaktaki metinde ayrı kelime olarak geçiyor mu (Türkçe karakter ve büyük harf fark etmez; ikinci ad engel olmaz). */
+export function nameMatches(profileName: string, sourceText: string) {
+  const want = normName(profileName).split(" ").filter((w) => w.length >= 2);
+  if (!want.length) return false;
+  const have = new Set(normName(sourceText).split(" "));
+  return want.every((w) => have.has(w));
+}
+
+const hostOn = (u: URL, d: string) => u.hostname.toLowerCase() === d || u.hostname.toLowerCase().endsWith("." + d);
+const parse = (link: string) => {
   try {
-    host = new URL(link).hostname.toLowerCase();
+    return new URL(link.trim());
   } catch {
-    return { status: "Doğrulanamadı", points: CERT_POINTS.other };
+    return null;
   }
-  const on = (d: string) => host === d || host.endsWith("." + d);
-  const official = (provider === "BTK Akademi" && on("btkakademi.gov.tr")) || (provider === "Credly" && on("credly.com"));
-  const known = (provider === "Coursera" && on("coursera.org")) || (provider === "Udemy" && on("udemy.com"));
-  if (nameOnCert && norm(nameOnCert) !== norm(profileName)) return { status: "İsim uyuşmuyor", points: 0 };
-  if (official) return { status: "Doğrulandı", points: CERT_POINTS[provider as "BTK Akademi" | "Credly"] };
-  return { status: known ? "Doğrulandı" : "Doğrulanamadı", points: CERT_POINTS.other };
+};
+
+/** btkakademi.gov.tr/portal/certificate/validate?certificateId=... → numara. */
+export function btkCertId(link: string) {
+  const u = parse(link);
+  if (!u || u.protocol !== "https:" || !hostOn(u, "btkakademi.gov.tr")) return null;
+  const id = u.searchParams.get("certificateId") ?? "";
+  return /^[A-Za-z0-9_-]{4,100}$/.test(id) ? id : null;
+}
+
+/** credly.com/badges/<uuid>[/...] → uuid. */
+export function credlyBadgeId(link: string) {
+  const u = parse(link);
+  if (!u || u.protocol !== "https:" || !hostOn(u, "credly.com")) return null;
+  const m = u.pathname.match(/^\/badges\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(\/|$)/i);
+  return m ? m[1].toLowerCase() : null;
+}
+
+/** Aynı sertifika iki hesaba eklenemesin diye anahtar: BTK ve Credly'de numara, diğerlerinde sadeleştirilmiş link. */
+export function certKey(provider: CertProvider, link: string) {
+  if (provider === "BTK Akademi") {
+    const id = btkCertId(link);
+    return id ? `btk:${id}` : null;
+  }
+  if (provider === "Credly") {
+    const id = credlyBadgeId(link);
+    return id ? `credly:${id}` : null;
+  }
+  const u = parse(link);
+  if (!u) return null;
+  const params = [...u.searchParams].filter(([k]) => !/^utm_/i.test(k)).sort(([a], [b]) => a.localeCompare(b));
+  const q = params.length ? "?" + params.map(([k, v]) => `${k}=${v}`).join("&") : "";
+  return `link:${u.hostname.toLowerCase().replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "")}${q}`.slice(0, 320);
 }
 
 // ---------- Referans ----------

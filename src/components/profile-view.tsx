@@ -78,7 +78,7 @@ export function ProfileView({
   onReportProject?: (id: string, name: string) => void;
 }) {
   const approved = data.references.filter((r) => r.status === "Onaylandı");
-  const refFor = (type: "experience" | "project", id: string) => data.references.find((r) => r.targetType === type && r.targetId === id);
+  const refFor = (type: "experience" | "project" | "certificate", id: string) => data.references.find((r) => r.targetType === type && r.targetId === id);
   const [showConnections, setShowConnections] = useState(false);
 
   return (
@@ -301,9 +301,7 @@ export function ProfileView({
                           {c.provider} · {c.date}
                         </p>
                       </div>
-                      <Pill tone={c.status === "Doğrulandı" ? "ok" : c.status === "İsim uyuşmuyor" ? "warn" : "muted"}>
-                        {c.status === "Doğrulandı" ? "✓ Doğrulandı" : c.status === "Doğrulanamadı" ? "Beyan" : c.status}
-                      </Pill>
+                      <CertBadge status={c.status} pending={refFor("certificate", c.id)?.status === "Bekliyor"} onRequest={own ? () => onRequestRef?.(`crt:${c.id}`) : undefined} />
                     </li>
                   ))}
                 </ul>
@@ -597,5 +595,30 @@ export function ProfileActionsOther({
         </DropdownMenu>
       )}
     </>
+  );
+}
+
+/** Kaynaktan doğrulandı / kişi onayladı / beyan (kendi profilinde "Onay iste"). */
+function CertBadge({ status, pending, onRequest }: { status: Certificate["status"]; pending: boolean; onRequest?: () => void }) {
+  if (status === "Doğrulandı") return <Pill tone="ok">✓ Doğrulandı</Pill>;
+  if (status === "Onaylandı")
+    return (
+      <Pill tone="ok">
+        <BadgeCheck className="size-3.5" /> Onaylı
+      </Pill>
+    );
+  if (status === "İsim uyuşmuyor") return <Pill tone="warn">İsim uyuşmuyor</Pill>;
+  if (pending)
+    return (
+      <Pill tone="warn">
+        <Clock className="size-3.5" /> Onay bekliyor
+      </Pill>
+    );
+  return onRequest ? (
+    <button onClick={onRequest} className={btn("lav", "sm", "shrink-0")}>
+      Onay iste
+    </button>
+  ) : (
+    <Pill tone="muted">Beyan</Pill>
   );
 }

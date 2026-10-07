@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { referencePoints } from "@/lib/score";
+import { CERT_POINTS, isDeclared, referencePoints } from "@/lib/score";
 import { check, run, text, UserError } from "@/lib/server/action";
 import { db } from "@/lib/server/admin";
 import { APPROVAL_DAYS, newToken, TOKEN_RE, tokenHash } from "@/lib/server/approval";
@@ -16,6 +16,7 @@ const site = () => process.env.SITE_URL ?? "http://localhost:3000";
 const Target = z.discriminatedUnion("type", [
   z.object({ type: z.literal("experience"), id: z.string().uuid() }),
   z.object({ type: z.literal("project"), id: z.string().uuid() }),
+  z.object({ type: z.literal("certificate"), id: z.string().uuid() }),
   z.object({
     type: z.literal("new"),
     kind: z.enum(["Staj", "İş", "Gönüllü"]),
@@ -48,7 +49,7 @@ export async function requestApproval(input: z.input<typeof RequestInput>) {
     if (!(await allow(user.id, "approval_email", 5, 24))) throw new UserError("Günde en fazla 5 onay isteği gönderebilirsin.");
 
     // Hedefin etiketi istemciden değil, kullanıcının kendi kaydından gelir.
-    let targetType: "experience" | "project" = "experience";
+    let targetType: "experience" | "project" | "certificate" = "experience";
     let targetId: string;
     let targetLabel: string;
     const t = v.target;
@@ -69,6 +70,15 @@ export async function requestApproval(input: z.input<typeof RequestInput>) {
       const x = e.data as { id: string; title: string; org: string };
       targetId = x.id;
       targetLabel = `${x.title} · ${x.org}`;
+    } else if (t.type === "certificate") {
+      // Sadece beyan edilen (BTK / Credly dışı) sertifika onaylatılır; kaynaktan doğrulanan zaten tam puanlı.
+      const c = await db().from("certificates").select("id, name, provider, status").eq("id", t.id).eq("user_id", user.id).maybeSingle();
+      if (!c.data) throw new UserError("Bu sertifika bulunamadı.");
+      const x = c.data as { id: string; name: string; provider: string; status: Parameters<typeof isDeclared>[0] };
+      if (!isDeclared(x.status)) throw new UserError("Sadece beyan edilen sertifikalar için onay istenebilir.");
+      targetType = "certificate";
+      targetId = x.id;
+      targetLabel = `${x.name} sertifikası (${x.provider})`;
     } else {
       const p = await db().from("projects").select("id, name").eq("id", t.id).eq("user_id", user.id).maybeSingle();
       if (!p.data) throw new UserError("Bu proje bulunamadı.");
@@ -84,7 +94,7 @@ export async function requestApproval(input: z.input<typeof RequestInput>) {
       status: string;
       expires_at: string;
     }[];
-    if (existing.some((a) => a.status === "Onaylandı")) throw new UserError("Bu bilgi zaten onaylandı. Bir deneyim ya da proje için tek onay alınabilir.");
+    if (existing.some((a) => a.status === "Onaylandı")) throw new UserError("Bu bilgi zaten onaylandı. Bir deneyim, proje ya da sertifika için tek onay alınabilir.");
     const stale = existing.filter((a) => a.status === "Bekliyor" && new Date(a.expires_at).getTime() < Date.now()).map((a) => a.id);
     if (existing.some((a) => a.status === "Bekliyor" && !stale.includes(a.id))) throw new UserError("Bu bilgi için bekleyen bir onay isteğin zaten var. Yanıtlanmasını bekle.");
     if (stale.length) await db().from("approvals").delete().in("id", stale);
@@ -134,18 +144,30 @@ export async function answerApproval(input: z.input<typeof AnswerInput>) {
     const hash = tokenHash(v.token);
     const found = await db()
       .from("approvals")
-      .select("id, user_id, target_id, approver_name, approver_email, target_label, status, expires_at")
+      .select("id, user_id, target_type, target_id, approver_name, approver_email, target_label, status, expires_at")
       .eq("token_hash", hash)
       .maybeSingle();
-    const a = found.data as { id: string; user_id: string; target_id: string; approver_name: string; approver_email: string; target_label: string; status: string; expires_at: string } | null;
+    const a = found.data as { id: string; user_id: string; target_type: string; target_id: string; approver_name: string; approver_email: string; target_label: string; status: string; expires_at: string } | null;
     if (!a || a.status !== "Bekliyor" || new Date(a.expires_at).getTime() < Date.now()) throw new UserError("Bu onay linki geçersiz, süresi dolmuş ya da daha önce kullanılmış.");
     if (v.approve) {
       const other = await db().from("approvals").select("id").eq("user_id", a.user_id).eq("target_id", a.target_id).eq("status", "Onaylandı").limit(1);
       if (other.data?.length) throw new UserError("Bu bilgi başka biri tarafından zaten onaylanmış. Teşekkürler, ek bir işlem gerekmiyor.");
     }
 
+    const cert = a.target_type === "certificate";
+    if (v.approve && cert) {
+      // Aynı sertifika başka bir hesapta doğrulanmış ya da onaylanmışsa ikinci kez puan vermez.
+      const c = (await db().from("certificates").select("cert_key, status").eq("id", a.target_id).maybeSingle()).data as { cert_key: string | null; status: string } | null;
+      if (!c) throw new UserError("Bu sertifika artık profilde yok.");
+      if (c.cert_key) {
+        const owned = await db().from("certificates").select("id").eq("cert_key", c.cert_key).in("status", ["Doğrulandı", "Onaylandı"]).neq("id", a.target_id).limit(1);
+        if (owned.data?.length) throw new UserError("Bu sertifika başka bir hesapta zaten onaylanmış.");
+      }
+    }
+
     const comment = v.approve ? v.comment?.trim() || null : null;
-    const points = v.approve ? referencePoints(a.approver_email, !!comment) : 0;
+    // Sertifika onayının puanı sertifikaya yazılır (beyan 5 → onaylı 20); referans olarak ayrıca puan getirmez.
+    const points = v.approve && !cert ? referencePoints(a.approver_email, !!comment) : 0;
     // Tek kullanımlık: durum hâlâ "Bekliyor" ise güncellenir; aynı anda iki yanıt gelirse biri boş döner.
     const upd = await db()
       .from("approvals")
@@ -161,6 +183,7 @@ export async function answerApproval(input: z.input<typeof AnswerInput>) {
       v.approve ? `${a.approver_name} onay verdi${comment ? " ve yorum yazdı" : ""}: ${a.target_label}` : `${a.approver_name} onay isteğini reddetti: ${a.target_label}`,
       "/profil",
     );
+    if (v.approve && cert) check(await db().from("certificates").update({ status: "Onaylandı", points: CERT_POINTS.approved }).eq("id", a.target_id), "sertifika");
     if (v.approve) await syncScore(a.user_id);
     return { approved: v.approve };
   });

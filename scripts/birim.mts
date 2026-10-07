@@ -12,7 +12,10 @@ import {
   snakeDraft,
   teamPoints,
   teamworkScore,
-  verifyCertificate,
+  btkCertId,
+  certKey,
+  credlyBadgeId,
+  nameMatches,
   promotionCount,
   relegationCount,
 } from "../src/lib/score.ts";
@@ -58,11 +61,19 @@ eq("Kalite: ölçülemeyen lint/audit yarım", qualityScore({ lighthouse: null, 
 eq("Akran: 4.5 ortalama → 27", peerPointsFor([5, 4]), 27);
 eq("Onay: kurumsal + yorum 35", referencePoints("a@firma.com.tr", true), 35);
 eq("Onay: kişisel e-posta 10", referencePoints("a@gmail.com", false), 10);
-eq("Sertifika: BTK 20", verifyCertificate("BTK Akademi", "https://www.btkakademi.gov.tr/x", "", "A B").points, 20);
-eq("Sertifika: Credly 25", verifyCertificate("Credly", "https://www.credly.com/badges/x", "", "A B").points, 25);
-eq("Sertifika: sahte alan adı 5", verifyCertificate("BTK Akademi", "https://btkakademi.gov.tr.evil.com/x", "", "A B").points, 5);
-eq("Sertifika: isim uyuşmuyor 0", verifyCertificate("Credly", "https://credly.com/x", "Başkası", "Ayşe Yıldız").points, 0);
-eq("Sertifika: Türkçe karakter normalize", verifyCertificate("Credly", "https://credly.com/x", "ayse yildiz", "Ayşe Yıldız").status, "Doğrulandı");
+const BTK = "https://www.btkakademi.gov.tr/portal/certificate/validate?certificateId=AB12CD";
+const CREDLY = "https://www.credly.com/badges/9736D207-a0c4-4a24-88e2-2f1e7fb34310/public_url";
+eq("Sertifika: BTK numarası", btkCertId(BTK), "AB12CD");
+eq("Sertifika: sahte BTK alan adı", btkCertId("https://btkakademi.gov.tr.evil.com/portal/certificate/validate?certificateId=AB12CD"), null);
+eq("Sertifika: BTK http reddedilir", btkCertId(BTK.replace("https", "http")), null);
+eq("Sertifika: Credly numarası", credlyBadgeId(CREDLY), "9736d207-a0c4-4a24-88e2-2f1e7fb34310");
+eq("Sertifika: Credly rozet olmayan sayfa", credlyBadgeId("https://www.credly.com/org/aws/badge/x"), null);
+eq("Sertifika: anahtar BTK", certKey("BTK Akademi", BTK), "btk:AB12CD");
+eq("Sertifika: anahtar link sadeleşir", certKey("Udemy", "https://www.udemy.com/certificate/UC-1/?utm_source=x"), certKey("Udemy", "https://udemy.com/certificate/UC-1"));
+eq("Sertifika: isim Türkçe karakter ve büyük harf", nameMatches("Ayşe Yıldız", "AYSE YILDIZ adına düzenlenmiştir"), true);
+eq("Sertifika: ikinci ad engel değil", nameMatches("Ayşe Yıldız", "Ayşe Nur Yıldız"), true);
+eq("Sertifika: başka isim tutmaz", nameMatches("Ayşe Yıldız", "Ayşe Yılmaz"), false);
+eq("Sertifika: kelimenin parçası tutmaz", nameMatches("Ali Can", "Alican Demir"), false);
 
 // --- Puan defteri kalemleri ---
 const items = scoreItems({

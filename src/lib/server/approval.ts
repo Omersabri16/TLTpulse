@@ -46,18 +46,24 @@ export async function approvalByToken(token: string): Promise<ApprovalView | nul
     comment: string | null;
     expires_at: string;
   };
-  const [p, exp] = await Promise.all([
+  const [p, exp, cert] = await Promise.all([
     db().from("profiles").select("name, headline, school").eq("id", a.user_id).single(),
     a.target_type === "experience" ? db().from("experiences").select("kind, start_label, end_label, description").eq("id", a.target_id).maybeSingle() : Promise.resolve({ data: null }),
+    a.target_type === "certificate" ? db().from("certificates").select("provider, link").eq("id", a.target_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   const e = exp.data as { kind: string; start_label: string; end_label: string; description: string | null } | null;
+  const c = cert.data as { provider: string; link: string } | null;
   return {
     status: a.status,
     expired: new Date(a.expires_at).getTime() < Date.now(),
     approverName: a.approver_name,
     relation: a.relation,
     targetLabel: a.target_label,
-    targetDetail: e ? [e.kind, [e.start_label, e.end_label].filter(Boolean).join(" – "), e.description].filter(Boolean).join(" · ") : "",
+    targetDetail: e
+      ? [e.kind, [e.start_label, e.end_label].filter(Boolean).join(" – "), e.description].filter(Boolean).join(" · ")
+      : c
+        ? `${c.provider} · ${c.link}`
+        : "",
     comment: a.comment ?? "",
     requestedAt: a.requested_at,
     approverDomain: a.approver_email.split("@")[1] ?? "",

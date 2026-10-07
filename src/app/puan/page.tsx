@@ -21,7 +21,7 @@ const INFO: Record<ScoreSource, { icon: typeof Award; rule: string; action: { la
   },
   Yarışmalar: { icon: Trophy, rule: "Zorluğa göre en fazla Kolay 100, Orta 150, Zor 200. Takım şartnamenin ne kadarını karşıladıysa o kadar puan; %50'nin altı 0.", action: { label: "Yarışmalar", href: "/yarismalar" } },
   "Akran puanı": { icon: Users, rule: "Yarışma bitince takım arkadaşların seni 1–5 yıldızla puanlar; her yarışmada ortalaman 30 üzerinden. Takımındaki yeni başlayanlardan 4+ yıldız alırsan +15 mentor puanı.", action: { label: "Yarışmalar", href: "/yarismalar" } },
-  Sertifikalar: { icon: Award, rule: "Resmi kaynaktan doğrulanan BTK Akademi 20, Credly 25; doğrulanamayan 5; isim uyuşmayan 0.", action: { label: "Sertifika ekle", href: "/profil?sertifika=1" } },
+  Sertifikalar: { icon: Award, rule: "Kaynaktan doğrulanan BTK Akademi ve Credly 20; diğerleri beyan 5, hocan ya da amirin onaylarsa 20; isim uyuşmayan 0.", action: { label: "Sertifika ekle", href: "/profil?sertifika=1" } },
   Referanslar: { icon: ShieldCheck, rule: "Amirin ya da hocan onaylarsa: kurumsal e-posta 30, kişisel e-posta 10; yorum yazarsa +5.", action: { label: "Onay iste", href: "/profil?onay=1" } },
   "Yol haritası": { icon: Map, rule: "AI yol haritandaki adımları tamamladıkça adım başına 5–10 puan.", action: { label: "Yol haritam", href: "/yol-haritasi" } },
 };

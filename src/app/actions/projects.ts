@@ -1,10 +1,11 @@
 "use server";
 
 import { z } from "zod";
-import { parseRepoUrl, verifyCertificate } from "@/lib/score";
-import { check, run, text, UserError, url } from "@/lib/server/action";
+import { certKey, parseRepoUrl } from "@/lib/score";
+import { check, run, UserError, url } from "@/lib/server/action";
 import { db } from "@/lib/server/admin";
 import { requireUser } from "@/lib/server/auth";
+import { verifyCertificate } from "@/lib/server/cert-verify";
 import { GitHubError, headCommit, repoInfo } from "@/lib/server/github";
 import { loadMe, syncScore } from "@/lib/server/me";
 import { notify } from "@/lib/server/notify";
@@ -158,31 +159,45 @@ const CertInput = z.object({
   name: z.string().trim().min(2, "Sertifikanın adını yaz.").max(120),
   provider: z.enum(["BTK Akademi", "Credly", "Coursera", "Udemy", "Diğer"]),
   link: url,
-  nameOnCert: text(80).optional(),
 });
 
-/** Doğrulama sonucu ve puan sunucuda belirlenir. */
+/** Sertifika kaynaktan doğrulanır: isim kaynaktan okunur, kullanıcının yazdığına güvenilmez. */
+async function verifyFor(userId: string, email: string, v: z.output<typeof CertInput>) {
+  const key = certKey(v.provider, v.link);
+  if (!key) throw new UserError("Bu sertifika linki okunamadı. Doğrulama sayfasının linkini yapıştır.");
+  // Sertifikayı sadece doğrulanmış ya da onaylanmış kayıt kilitler: isim tutmadığı için 0 puanla eklenen bir kayıt,
+  // gerçek sahibinin kendi sertifikasını eklemesini engellemesin.
+  const rows = (check(await db().from("certificates").select("user_id, status").eq("cert_key", key), "sertifika") ?? []) as { user_id: string; status: string }[];
+  if (rows.some((r) => r.user_id === userId)) throw new UserError("Bu sertifika zaten ekli.");
+  if (rows.some((r) => r.status === "Doğrulandı" || r.status === "Onaylandı")) throw new UserError("Bu sertifika başka bir hesapta doğrulanmış.");
+  if (!(await allow(userId, "cert_check", 30, 1))) throw new UserError("Bir saatte çok fazla sertifika denedin. Biraz sonra tekrar dene.");
+  const p = check(await db().from("profiles").select("name").eq("id", userId).single(), "profil") as { name: string };
+  const res = await verifyCertificate(v.provider, v.link, { name: p.name, email });
+  if (!res.ok) throw new UserError(res.reason);
+  return { key, status: res.status, points: res.points };
+}
+
+/** Önizleme: doğrulama sonucunu gösterir, kaydetmez. */
 export async function checkCertificate(input: z.input<typeof CertInput>) {
   return run(async () => {
     const user = await requireUser();
-    const v = CertInput.parse(input);
-    const p = check(await db().from("profiles").select("name").eq("id", user.id).single(), "profil") as { name: string };
-    return verifyCertificate(v.provider, v.link, v.nameOnCert ?? "", p.name);
+    const { status, points } = await verifyFor(user.id, user.email, CertInput.parse(input));
+    return { status, points };
   });
 }
 
+/** Ekleme: doğrulama sunucuda yeniden yapılır; istemcinin gördüğü sonuç kaydedilmez. */
 export async function addCertificate(input: z.input<typeof CertInput>) {
   return run(async () => {
     const user = await requireUser();
     const v = CertInput.parse(input);
-    const p = check(await db().from("profiles").select("name").eq("id", user.id).single(), "profil") as { name: string };
-    const dup = await db().from("certificates").select("id").eq("user_id", user.id).eq("link", v.link).maybeSingle();
-    if (dup.data) throw new UserError("Bu sertifika zaten ekli.");
     const count = (await db().from("certificates").select("id", { count: "exact", head: true }).eq("user_id", user.id)).count ?? 0;
     if (count >= 30) throw new UserError("En fazla 30 sertifika ekleyebilirsin.");
-    const res = verifyCertificate(v.provider, v.link, v.nameOnCert ?? "", p.name);
-    check(await db().from("certificates").insert({ user_id: user.id, name: v.name, provider: v.provider, link: v.link, status: res.status, points: res.points }), "sertifika");
+    const res = await verifyFor(user.id, user.email, v);
+    const ins = await db().from("certificates").insert({ user_id: user.id, name: v.name, provider: v.provider, link: v.link, cert_key: res.key, status: res.status, points: res.points });
+    if (ins.error?.code === "23505") throw new UserError("Bu sertifika zaten eklenmiş.");
+    check(ins, "sertifika");
     await syncScore(user.id);
-    return { points: res.points, me: await loadMe(user.id, user.email) };
+    return { points: res.points, status: res.status, me: await loadMe(user.id, user.email) };
   });
 }

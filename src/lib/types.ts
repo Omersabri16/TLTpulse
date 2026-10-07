@@ -81,7 +81,8 @@ export interface Project {
 }
 
 export type CertProvider = "BTK Akademi" | "Credly" | "Coursera" | "Udemy" | "Diğer";
-export type CertStatus = "Doğrulandı" | "İsim uyuşmuyor" | "Doğrulanamadı";
+/** "Doğrulanamadı" eski kayıtlar için; yenilerde "Beyan". "Onaylandı": beyan edilen sertifikayı bir kişi onayladı. */
+export type CertStatus = "Doğrulandı" | "İsim uyuşmuyor" | "Beyan" | "Onaylandı" | "Doğrulanamadı";
 
 export interface Certificate {
   id: string;
@@ -110,7 +111,7 @@ export type ReferenceStatus = "Bekliyor" | "Onaylandı" | "Reddedildi";
 /** Amir/hoca onayı. Hedef bir deneyim ya da proje olabilir. */
 export interface Reference {
   token: string;
-  targetType: "experience" | "project";
+  targetType: "experience" | "project" | "certificate";
   targetId: string;
   targetLabel: string;
   approverName: string;

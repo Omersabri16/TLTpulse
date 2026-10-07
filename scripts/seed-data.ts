@@ -277,7 +277,9 @@ export const DEMO = {
   ] satisfies SeedProject[],
   certs: [
     { name: "SQL ile Veritabanı Programlama", provider: "BTK Akademi", link: "https://www.btkakademi.gov.tr/portal/certificate/validate?certificateId=AB12CD", date: "2026-10-04", status: "Doğrulandı", points: 20 },
-    { name: "AWS Cloud Practitioner", provider: "Credly", link: "https://www.credly.com/badges/1f3a", date: "2026-10-05", status: "Doğrulandı", points: 25 },
+    { name: "AWS Cloud Practitioner", provider: "Credly", link: "https://www.credly.com/badges/1f3a", date: "2026-10-05", status: "Doğrulandı", points: 20 },
+    // Beyan: demoda "Onay iste" düğmesi görünsün (onaylanırsa 20 puan).
+    { name: "Node.js ile REST API", provider: "Udemy", link: "https://www.udemy.com/certificate/UC-demo-deniz/", date: "2026-10-05", status: "Beyan", points: 5 },
   ],
   references: [
     {

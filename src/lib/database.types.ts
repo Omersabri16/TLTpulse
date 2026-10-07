@@ -189,6 +189,7 @@ export type Database = {
       }
       certificates: {
         Row: {
+          cert_key: string | null
           created_at: string
           id: string
           issued_on: string
@@ -200,6 +201,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cert_key?: string | null
           created_at?: string
           id?: string
           issued_on?: string
@@ -211,6 +213,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cert_key?: string | null
           created_at?: string
           id?: string
           issued_on?: string

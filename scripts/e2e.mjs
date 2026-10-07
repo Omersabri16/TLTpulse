@@ -172,11 +172,36 @@ async function main() {
   expect("3+ kullanıcıda aynı dosyalar şablon sayılır: şablon reddi", r.ok && !r.data.ok && r.data.kind === "şablon", r.ok ? r.data.reason ?? "kabul edildi" : r.error);
   for (const o of others) await admin.auth.admin.deleteUser(o.uid);
 
-  // --- Sertifika ve onay (yeni ölçek) ---
-  r = await call("addCertificate", { name: "SQL", provider: "BTK Akademi", link: "https://www.btkakademi.gov.tr/portal/certificate/validate?certificateId=AB12", nameOnCert: "Test Bot" });
-  expect("BTK sertifikası +20", r.ok && r.data.points === 20 && r.data.me.score.season === 20, r.ok ? `${r.data.points}, sezon ${r.data.me.score.season}` : r.error);
-  r = await call("addCertificate", { name: "Sahte", provider: "BTK Akademi", link: "https://btkakademi.gov.tr.evil.com/x", nameOnCert: "Test Bot" });
-  expect("sahte alan adı doğrulanmaz (+5)", r.ok && r.data.points === 5, r.ok ? String(r.data.points) : r.error);
+  // --- Sertifika: BTK ve Credly kaynaktan, diğerleri beyan (5) ya da onaylı (20) ---
+  r = await call("checkCertificate", { name: "SQL", provider: "BTK Akademi", link: "https://www.btkakademi.gov.tr/portal/certificate/validate?certificateId=E2E-OLMAYAN-123" });
+  expect("BTK'da olmayan sertifika reddedilir (kaynaktan)", !r.ok && /bulunamadı/i.test(r.error), r.ok ? JSON.stringify(r.data) : r.error);
+  r = await call("addCertificate", { name: "Sahte", provider: "BTK Akademi", link: "https://btkakademi.gov.tr.evil.com/portal/certificate/validate?certificateId=AB12" });
+  expect("sahte BTK alan adı reddedilir", !r.ok, r.ok ? JSON.stringify(r.data.points) : r.error);
+  r = await call("checkCertificate", { name: "AWS Database", provider: "Credly", link: "https://www.credly.com/badges/9736d207-a0c4-4a24-88e2-2f1e7fb34310/public_url" });
+  expect("başkasının Credly rozeti: isim uyuşmuyor, 0 puan", r.ok && r.data.status === "İsim uyuşmuyor" && r.data.points === 0, r.ok ? JSON.stringify(r.data) : r.error);
+  r = await call("checkCertificate", { name: "Yok", provider: "Credly", link: "https://www.credly.com/badges/00000000-0000-0000-0000-000000000000" });
+  expect("Credly'de olmayan rozet reddedilir", !r.ok && /bulunamadı/i.test(r.error), r.ok ? JSON.stringify(r.data) : r.error);
+  const beforeCert = (await call("refreshMe")).data.score.season;
+  r = await call("addCertificate", { name: "React", provider: "Udemy", link: "https://www.udemy.com/certificate/UC-e2e-test/" });
+  expect("Udemy sertifikası beyan, +5", r.ok && r.data.status === "Beyan" && r.data.me.score.season - beforeCert === 5, r.ok ? `${r.data.status}, ${beforeCert} → ${r.data.me.score.season}` : r.error);
+  const cert = r.ok ? r.data.me.certs.find((c) => c.name === "React") : null;
+  r = await call("addCertificate", { name: "React", provider: "Udemy", link: "https://udemy.com/certificate/UC-e2e-test?utm_source=x" });
+  expect("aynı sertifika ikinci kez eklenemez", !r.ok, r.ok ? "eklendi" : r.error);
+  // Onay e-postası göndermeden: istek satırı token'ı bilinerek eklenir, onay girişsiz verilir.
+  const certToken = randomBytes(32).toString("base64url");
+  if (cert)
+    await admin.from("approvals").insert({ user_id: uid, target_type: "certificate", target_id: cert.id, target_label: "React sertifikası (Udemy)", approver_name: "Test Hoca", approver_email: "hoca@universite.example.edu", relation: "Hoca", token_hash: createHash("sha256").update(certToken).digest("hex"), expires_at: new Date(Date.now() + 86400_000).toISOString() });
+  {
+    const saved = { ...cookies };
+    cookies = {};
+    r = await call("answerApproval", { token: certToken, approve: true, comment: "Dersimde aldı." });
+    cookies = saved;
+  }
+  const afterCert = (await call("refreshMe")).data;
+  const certNow = afterCert.certs.find((c) => c.name === "React");
+  expect("onaylanan sertifika 5 → 20 (referans ayrıca puan getirmez)", r.ok && certNow?.status === "Onaylandı" && afterCert.score.season - beforeCert === 20, `${certNow?.status}, ${beforeCert} → ${afterCert.score.season}`);
+  r = await call("requestApproval", { target: { type: "certificate", id: cert?.id ?? "00000000-0000-0000-0000-000000000000" }, approverName: "Başka Hoca", approverEmail: "baska@universite.example.edu", relation: "Hoca" });
+  expect("onaylanmış sertifikaya yeniden onay istenemez", !r.ok, r.ok ? "istendi" : r.error);
 
   const me = (await call("refreshMe")).data;
   const exp = (await admin.from("experiences").insert({ user_id: uid, kind: "Staj", title: "Backend stajyeri", org: "Test A.Ş.", start_label: "Haz 2025", end_label: "Ağu 2025" }).select("id").single()).data;

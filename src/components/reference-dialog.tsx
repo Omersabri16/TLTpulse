@@ -5,7 +5,7 @@ import { useState } from "react";
 import { requestApproval } from "@/app/actions/approvals";
 import { Choice, Field, Modal } from "@/components/modal";
 import { btn, inputClass } from "@/lib/btn";
-import { isCorporateEmail } from "@/lib/score";
+import { isCorporateEmail, isDeclared } from "@/lib/score";
 import { useAct, useApp } from "@/lib/store";
 import type { ExperienceKind, Relation } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
   const profile = useApp((s) => s.profile);
   const projects = useApp((s) => s.projects);
   const references = useApp((s) => s.references);
+  const certs = useApp((s) => s.certs).filter((c) => isDeclared(c.status));
   const act = useAct();
   const [busy, setBusy] = useState(false);
 
@@ -56,7 +57,9 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
         ? { type: "new" as const, kind, title, org, start, end }
         : target.startsWith("exp:")
           ? { type: "experience" as const, id: target.slice(4) }
-          : { type: "project" as const, id: target.slice(4) };
+          : target.startsWith("crt:")
+            ? { type: "certificate" as const, id: target.slice(4) }
+            : { type: "project" as const, id: target.slice(4) };
     setBusy(true);
     const ok = await act(requestApproval({ target: t, approverName, approverEmail: email, relation }));
     setBusy(false);
@@ -70,7 +73,7 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
       open
       onOpenChange={onOpenChange}
       title={sent ? "Onay isteği gönderildi" : "Onay iste"}
-      description={sent ? undefined : "Stajını, işini ya da projeni amirin veya hocan onaylasın. Ona e-postayla bir link gider."}
+      description={sent ? undefined : "Stajını, işini, projeni ya da sertifikanı amirin veya hocan onaylasın. Ona e-postayla bir link gider."}
       className="sm:max-w-xl"
     >
       {sent ? (
@@ -108,6 +111,11 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
                   Proje: {p.name}
                 </option>
               ))}
+              {certs.map((c) => (
+                <option key={c.id} value={`crt:${c.id}`}>
+                  Sertifika: {c.name} ({c.provider})
+                </option>
+              ))}
               <option value={NEW}>+ Yeni deneyim ekle</option>
             </select>
           </Field>
@@ -130,7 +138,9 @@ function ReferenceBody({ onOpenChange, preset }: { onOpenChange: (o: boolean) =>
               <input className={inputClass} type="email" value={approverEmail} onChange={(e) => setApproverEmail(e.target.value)} placeholder="ad@firma.com.tr" />
             </div>
           </Field>
-          {approverEmail.includes("@") && (
+          {target.startsWith("crt:") ? (
+            <p className="-mt-2 text-xs text-muted-foreground">Onaylanan sertifika 5 yerine 20 puan getirir.</p>
+          ) : approverEmail.includes("@") && (
             <p className={cn("-mt-2 text-xs", corporate ? "text-ok" : "text-warn")}>
               {corporate ? "Kurumsal e-posta: onay tam puan alır." : "Kişisel e-posta: onay daha düşük ağırlık alır. Mümkünse kurum e-postasını gir."}
             </p>
