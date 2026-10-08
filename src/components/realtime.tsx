@@ -43,8 +43,10 @@ export function RealtimeBridge() {
     const channel = sb
       .channel(`canli-${username}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (p: { new: unknown }) => {
-        const n = p.new as { id: string; text: string; href: string; read: boolean; created_at: string };
-        addNotification({ id: n.id, text: n.text, href: n.href, read: n.read, at: fmtRelative(n.created_at) });
+        const n = p.new as Partial<{ id: string; text: string; href: string; read: boolean; created_at: string }>;
+        // Olay bazen satırın içeriği olmadan gelir (ör. oturum token'ı yenilenirken); o zaman bildirimler sunucudan okunur.
+        if (n.id && n.text && n.created_at) addNotification({ id: n.id, text: n.text, href: n.href ?? "/", read: !!n.read, at: fmtRelative(n.created_at) });
+        else refresh();
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, refresh)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, refresh)

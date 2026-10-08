@@ -104,7 +104,12 @@ export async function formTeams(cid: string) {
   await db().from("applications").update({ status: "Takımda" }).eq("competition_id", cid).in("user_id", [...inTeam]);
   const subs = list.filter((a) => !inTeam.has(a.user_id)).map((a) => a.user_id);
   if (subs.length) await db().from("applications").update({ status: "Yedek" }).eq("competition_id", cid).in("user_id", subs);
-  await db().from("competitions").update({ status: "Devam ediyor" }).eq("id", cid);
+  // Yönetici takımları erken kurduysa yarışma o gün başlamış olur (repo tarihi ve commit aralığı buna göre).
+  const today = todayTR();
+  await db()
+    .from("competitions")
+    .update({ status: "Devam ediyor", ...(c.start_date > today ? { start_date: today } : {}) })
+    .eq("id", cid);
 
   for (const r of rows) {
     const t = teams.find((x) => x.id === r.team_id)!;
@@ -168,18 +173,20 @@ async function frozenSha(owner: string, repo: string, branch: string, until: str
 /** Bir takımın teslim anındaki sinyalleri (GitHub API). Elenme sebebi varsa `eliminated`. */
 async function teamSignals(
   c: CompRow,
-  t: { id: string; repo_url: string | null; demo_url: string | null },
+  t: { id: string; repo_url: string | null; demo_url: string | null; created_at: string },
   members: { user_id: string; github: string; verified: boolean }[],
 ): Promise<{ sha: string | null; signals: TeamSignals }> {
   if (!t.repo_url) return { sha: null, signals: { eliminated: "Teslim yapılmadı (GitHub reposu yok)." } };
   if (!t.demo_url) return { sha: null, signals: { eliminated: "Teslimde demo linki yok." } };
   const [, owner, repo] = t.repo_url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/) ?? [];
-  const since = startOfDay(c.start_date).toISOString();
+  // Yarışma erken başlatıldıysa (takımlar başlangıç tarihinden önce kurulduysa) başlangıç takımın kurulduğu gündür.
+  const start = new Date(Math.min(startOfDay(c.start_date).getTime(), startOfDay(new Date(t.created_at).toLocaleDateString("en-CA", { timeZone: "Europe/Istanbul" })).getTime()));
+  const since = start.toISOString();
   const until = endOfDay(c.end_date).toISOString();
   try {
     const info = await repoInfo(owner, repo);
     if (info.fork) return { sha: null, signals: { eliminated: "Teslim edilen repo bir fork." } };
-    if (new Date(info.createdAt) < startOfDay(c.start_date)) return { sha: null, signals: { eliminated: "Repo yarışma başlamadan açılmış.", repoCreatedAt: info.createdAt } };
+    if (new Date(info.createdAt) < start) return { sha: null, signals: { eliminated: "Repo yarışma başlamadan açılmış.", repoCreatedAt: info.createdAt } };
     const sha = await frozenSha(info.owner, info.repo, info.defaultBranch, until);
     if (!sha) return { sha: null, signals: { eliminated: "Teslim saatinden önce hiç commit yok." } };
     const [tree, ci, commits, opens] = await Promise.all([
@@ -212,8 +219,9 @@ async function teamSignals(
 export async function freezeAndEvaluate(cid: string) {
   const c = await getComp(cid);
   if (!c || c.status !== "Devam ediyor") throw new EvalError("Bu yarışma değerlendirmeye hazır değil.");
-  const teams = ((await db().from("teams").select("id, repo_url, demo_url, frozen_sha, signals").eq("competition_id", cid)).data ?? []) as {
+  const teams = ((await db().from("teams").select("id, repo_url, demo_url, frozen_sha, signals, created_at").eq("competition_id", cid)).data ?? []) as {
     id: string;
+    created_at: string;
     repo_url: string | null;
     demo_url: string | null;
     frozen_sha: string | null;
