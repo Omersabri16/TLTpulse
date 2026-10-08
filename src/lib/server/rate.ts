@@ -28,6 +28,13 @@ export async function allowKey(key: string, action: string, limit: number, windo
   return true;
 }
 
+/** allowKey'in son kaydını geri alır (iş hiç başlamadıysa hak düşmesin). */
+export async function refundKey(key: string, action: string) {
+  const k = createHash("sha256").update(`${action}:${key.toLowerCase()}`).digest("hex").slice(0, 40);
+  const last = (await db().from("rate_events").select("id").eq("key", k).eq("action", action).order("created_at", { ascending: false }).limit(1).maybeSingle()).data as { id: number } | null;
+  if (last) await db().from("rate_events").delete().eq("id", last.id);
+}
+
 /** İsteğin IP'si (Vercel x-forwarded-for'un ilk değerini kendisi yazar). */
 export async function clientIp() {
   const h = await headers();

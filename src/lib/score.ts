@@ -52,8 +52,8 @@ export const DIFFICULTY_POINTS: Record<Difficulty, number> = { Kolay: 10, Orta: 
 /** Kalite (sadece Orta ve Zor): CI'da yeşil testler, açılan demo, anlamlı README, 10+ farklı günde geliştirme. */
 export const QUALITY_RULES = { ci: 12, demo: 8, readme: 4, days: 6 } as const;
 export const MIN_AUTHORSHIP = 10;
-/** Şablon dışı kendi kaynak dosyası bundan azsa proje eklenemez. */
-export const MIN_OWN_FILES = 10;
+/** Şablon dışı kendi kaynak dosyası bundan azsa proje eklenemez (en az 1). */
+export const MIN_OWN_FILES = 1;
 /** Başka bir projeyle bu oranda ya da fazla aynı dosya varsa kopya sayılır. */
 export const COPY_RATIO = 0.5;
 /** İlk commit'le gelen kod bu oranı geçerse "içe aktarılmış" sayılır. */

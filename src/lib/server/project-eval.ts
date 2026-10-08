@@ -1,6 +1,6 @@
 import "server-only";
 
-import { COPY_RATIO, MIN_OWN_FILES, projectPoints, qualityLabel, qualityPoints, importPenalized, MIN_COMMIT_DAYS } from "@/lib/score";
+import { COPY_RATIO, projectPoints, qualityLabel, qualityPoints, importPenalized, MIN_COMMIT_DAYS } from "@/lib/score";
 import type { Difficulty, ProjectAnalysis } from "@/lib/types";
 import { db } from "./admin";
 import { classifyDifficulty } from "./ai-difficulty";
@@ -58,7 +58,7 @@ export async function evaluateProject(owner: string, repo: string, opts: { userI
     return {
       ok: false,
       kind: "şablon",
-      reason: `Şablon ve üretilmiş dosyalar dışında en az ${MIN_OWN_FILES} kendi kaynak dosyan olmalı; bu repoda ${own.source.length} tane var.`,
+      reason: "Bu repoda şablon ve üretilmiş dosyalar dışında kendi yazdığın bir kaynak dosyası yok.",
     };
 
   const ownShas = [...new Set(own.own.map((x) => x.sha))];

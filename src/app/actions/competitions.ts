@@ -10,7 +10,7 @@ import { endOfDay, requestPublicRun } from "@/lib/server/competition-flow";
 import { EvalError } from "@/lib/server/evaluation";
 import { loadMe, syncScore } from "@/lib/server/me";
 import { notify } from "@/lib/server/notify";
-import { allow, allowKey } from "@/lib/server/rate";
+import { allow, allowKey, refundKey } from "@/lib/server/rate";
 
 const CompId = z.string().regex(/^y-[0-9]{2,4}$/, "Geçersiz yarışma.");
 const TeamId = z.string().regex(/^t-[A-Za-z0-9-]{2,40}$/, "Geçersiz takım.");
@@ -140,6 +140,8 @@ export async function runPublicTests(teamId: string) {
     try {
       await requestPublicRun(id);
     } catch (e) {
+      // İş akışı başlamadıysa (ayar eksik, demo linki yok, GitHub hatası) deneme hakkı düşmez.
+      await refundKey(id, "acik_test");
       if (e instanceof EvalError) throw new UserError(e.message);
       throw e;
     }

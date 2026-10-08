@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 const STAGES = ["Repo ve commit yazarlığı", "Dosya özetleri: kopya ve şablon kontrolü", "AI kodu okuyup zorluğu sınıflandırıyor", "CI, demo, README ve commit günleri"];
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const REJECT_TITLE: Record<string, string> = { kopya: "Kopya kod", şablon: "Çoğu şablon dosyası", fork: "Fork", yazarlık: "Commit yazarlığı yetersiz", erişim: "Repoya ulaşılamadı" };
+const REJECT_TITLE: Record<string, string> = { kopya: "Kopya kod", şablon: "Kendi kodun yok", fork: "Fork", yazarlık: "Commit yazarlığı yetersiz", erişim: "Repoya ulaşılamadı" };
 
 /** Analiz sonucunun ortak gösterimi (ekleme penceresi ve proje detayı). */
 export function AnalysisView({ analysis, repo, sha, pending = false }: { analysis: ProjectAnalysis; repo: string; sha?: string; pending?: boolean }) {
