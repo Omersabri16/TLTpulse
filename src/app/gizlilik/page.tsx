@@ -154,7 +154,7 @@ export default function Page() {
               Verilerin hesabın açık olduğu sürece saklanır. Hesabını sildiğimizde profilin, projelerin, mesajların ve sana ait bütün kayıtlar veritabanından silinir. Vercel&apos;in sunucu kayıtları kısa süre sonra kendiliğinden silinir.
             </p>
             <p>
-              Hesabını <b>Hesap ve gizlilik</b> sayfasından (sağ üstteki menü) kendin silebilirsin; silme anında gerçekleşir. Takım sohbetlerindeki mesajların, takımın geçmişi bozulmasın diye &quot;Silinmiş kullanıcı&quot; adıyla kalır. Haftalık şifreli veritabanı yedekleri 30 gün sonra kendiliğinden silinir.
+              Hesabını <b>Hesap ve gizlilik</b> sayfasından (sağ üstteki menü) kendin silebilirsin; silme anında gerçekleşir. Takım sohbetlerindeki mesajların, takımın geçmişi bozulmasın diye &quot;Silinmiş kullanıcı&quot; adıyla kalır. Takım arkadaşlarına verdiğin akran puanı yıldızları ve notları da, onların puanı düşmesin diye adın olmadan (anonim) kalır. Haftalık şifreli veritabanı yedekleri 30 gün sonra kendiliğinden silinir.
             </p>
             <p>
               Aynı sayfadan <b>bütün verilerini JSON olarak indirebilirsin</b>.

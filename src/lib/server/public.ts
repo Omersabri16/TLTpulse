@@ -102,11 +102,11 @@ async function competitionsWhere(ids?: string[]): Promise<Competition[]> {
   const cids = rows.map((c) => c.id);
   const [teams, members, apps, results] = await Promise.all([
     db().from("teams").select("id, competition_id, name, repo_url, demo_url, submitted_at, public_run, public_run_at").in("competition_id", cids),
-    db().from("team_members").select("team_id, user_id, field, competition_id, points").in("competition_id", cids),
+    db().from("team_members").select("team_id, user_id, field, competition_id, points, commits").in("competition_id", cids),
     db().from("applications").select("competition_id, field").in("competition_id", cids),
     db().from("competition_results").select("*").in("competition_id", cids),
   ]);
-  const memberRows = (members.data ?? []) as (Member & { points: number })[];
+  const memberRows = (members.data ?? []) as (Member & { points: number; commits: number | null })[];
   const people = memberRows.length
     ? (((await db().from("profiles").select("id, username, name").in("id", [...new Set(memberRows.map((m) => m.user_id))])).data ?? []) as { id: string; username: string; name: string }[])
     : [];
@@ -175,6 +175,7 @@ async function competitionsWhere(ids?: string[]): Promise<Competition[]> {
                 name: person.get(m.user_id)?.name ?? "Silinmiş kullanıcı",
                 field: m.field,
                 points: done ? m.points : undefined,
+                commits: done ? (m.commits ?? 0) : undefined,
               })),
           };
         })

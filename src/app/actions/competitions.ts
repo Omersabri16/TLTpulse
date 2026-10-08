@@ -107,14 +107,18 @@ export async function ratePeers(input: z.input<typeof RateInput>) {
     const v = RateInput.parse(input);
     const c = await membership(v.teamId, user.id);
     if (c.status !== "Tamamlandı") throw new UserError("Takım arkadaşları yarışma bittikten sonra puanlanır.");
-    const members = check(await db().from("team_members").select("user_id, profiles(username)").eq("team_id", v.teamId).neq("user_id", user.id), "üyeler") as unknown as {
+    const members = check(await db().from("team_members").select("user_id, commits, profiles(username)").eq("team_id", v.teamId).neq("user_id", user.id), "üyeler") as unknown as {
       user_id: string;
+      commits: number | null;
       profiles: { username: string } | null;
     }[];
-    const byName = new Map(members.map((m) => [m.profiles?.username ?? "", m.user_id]));
+    const byName = new Map(members.map((m) => [m.profiles?.username ?? "", m]));
     const rows = Object.entries(v.ratings).map(([username, stars]) => {
-      const to = byName.get(username);
-      if (!to) throw new UserError("Sadece takım arkadaşlarını puanlayabilirsin.");
+      const m = byName.get(username);
+      if (!m) throw new UserError("Sadece takım arkadaşlarını puanlayabilirsin.");
+      // Hiç commit'i olmayan üye akran puanı alamaz (yarışmada kod yazmadan yıldızla puan toplanmasın).
+      if (!m.commits) throw new UserError("Yarışmada hiç commit'i olmayan takım arkadaşı puanlanamaz.");
+      const to = m.user_id;
       return { competition_id: c.id, team_id: v.teamId, from_user: user.id, to_user: to, stars };
     });
     if (!rows.length) throw new UserError("En az bir kişiyi puanla.");

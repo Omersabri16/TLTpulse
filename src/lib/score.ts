@@ -155,9 +155,19 @@ export function snakeDraft<T>(byField: T[][]): { teams: T[][]; substitutes: T[] 
 // ---------- Akran ve mentor puanı ----------
 
 const PEER_POINTS_PER_COMPETITION = 30;
-/** Öneri olarak uygulandı (kararlar.md Bölüm 5, "Mentor puanı"): takımındaki Yeni başlayanlardan ortalama 4+ yıldız. */
+/** Kararlar.md Bölüm 5, "Mentor puanı" (9 Ekim'de onaylandı): takımındaki Yeni başlayanlardan ortalama 4+ yıldız. */
 export const MENTOR_POINTS = 15;
 export const MENTOR_MIN_STARS = 4;
+
+/**
+ * Bir yarışmada mentor puanı hak edildi mi? Ligler yarışma anındaki (takıma girildiğindeki) lig: sonradan puanlayan
+ * yükselse ya da mentor düşse de kazanılan puan değişmez.
+ */
+export function mentorEarned(myLeague: Level, ratings: { stars: number; fromLeague: Level }[]) {
+  if (myLeague === "Yeni başlayan") return false;
+  const fromNew = ratings.filter((r) => r.fromLeague === "Yeni başlayan");
+  return fromNew.length > 0 && fromNew.reduce((a, r) => a + r.stars, 0) / fromNew.length >= MENTOR_MIN_STARS;
+}
 
 // ---------- Sertifika doğrulama ----------
 

@@ -18,8 +18,10 @@ export function PeerRatingDialog({ team, open, onOpenChange }: { team: Team; ope
   const act = useAct();
   const [busy, setBusy] = useState(false);
   const mates = team.members.filter((m) => m.username !== username);
+  // Yarışmada hiç commit'i olmayan arkadaş akran puanı alamaz (sunucu da reddeder).
+  const rateable = mates.filter((m) => (m.commits ?? 0) > 0);
   const [stars, setStars] = useState<Record<string, number>>({});
-  const ready = mates.every((m) => stars[m.username]);
+  const ready = rateable.length > 0 && rateable.every((m) => stars[m.username]);
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Takım arkadaşlarını puanla" description="Puanlar anonimdir. Her arkadaşının katkısını 1–5 arası değerlendir.">
@@ -33,21 +35,25 @@ export function PeerRatingDialog({ team, open, onOpenChange }: { team: Team; ope
                 <span className="text-muted-foreground">{m.field}</span>
               </span>
             </span>
-            <span className="flex items-center gap-1" role="radiogroup" aria-label={`${m.name} puanı`}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  role="radio"
-                  aria-checked={stars[m.username] === n}
-                  aria-label={`${n} yıldız`}
-                  onClick={() => setStars({ ...stars, [m.username]: n })}
-                  className="p-0.5"
-                >
-                  <Star className={cn("size-6", (stars[m.username] ?? 0) >= n ? "fill-cyan text-cyan" : "text-muted-foreground/40")} />
-                </button>
-              ))}
-              <span className="ml-2 w-16 text-xs text-muted-foreground">{LABELS[stars[m.username] ?? 0]}</span>
-            </span>
+            {(m.commits ?? 0) === 0 ? (
+              <span className="text-sm text-muted-foreground">Yarışmada commit&apos;i yok, puanlanamaz.</span>
+            ) : (
+              <span className="flex items-center gap-1" role="radiogroup" aria-label={`${m.name} puanı`}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    role="radio"
+                    aria-checked={stars[m.username] === n}
+                    aria-label={`${n} yıldız`}
+                    onClick={() => setStars({ ...stars, [m.username]: n })}
+                    className="p-0.5"
+                  >
+                    <Star className={cn("size-6", (stars[m.username] ?? 0) >= n ? "fill-cyan text-cyan" : "text-muted-foreground/40")} />
+                  </button>
+                ))}
+                <span className="ml-2 w-16 text-xs text-muted-foreground">{LABELS[stars[m.username] ?? 0]}</span>
+              </span>
+            )}
           </li>
         ))}
       </ul>

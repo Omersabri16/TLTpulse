@@ -715,7 +715,8 @@ export type Database = {
         Row: {
           competition_id: string
           created_at: string
-          from_user: string
+          from_league: string | null
+          from_user: string | null
           id: string
           note: string | null
           stars: number
@@ -725,7 +726,8 @@ export type Database = {
         Insert: {
           competition_id: string
           created_at?: string
-          from_user: string
+          from_league?: string | null
+          from_user?: string | null
           id?: string
           note?: string | null
           stars: number
@@ -735,7 +737,8 @@ export type Database = {
         Update: {
           competition_id?: string
           created_at?: string
-          from_user?: string
+          from_league?: string | null
+          from_user?: string | null
           id?: string
           note?: string | null
           stars?: number
@@ -1225,6 +1228,7 @@ export type Database = {
           commits: number | null
           competition_id: string
           field: string
+          league: string | null
           points: number
           team_id: string
           user_id: string
@@ -1233,6 +1237,7 @@ export type Database = {
           commits?: number | null
           competition_id: string
           field: string
+          league?: string | null
           points?: number
           team_id: string
           user_id: string
@@ -1241,6 +1246,7 @@ export type Database = {
           commits?: number | null
           competition_id?: string
           field?: string
+          league?: string | null
           points?: number
           team_id?: string
           user_id?: string

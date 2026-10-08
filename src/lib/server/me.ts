@@ -1,6 +1,6 @@
 import "server-only";
 
-import { MENTOR_MIN_STARS, scoreItems, stepDone, sumBySource, type RoadmapContext } from "@/lib/score";
+import { mentorEarned, scoreItems, stepDone, sumBySource, type RoadmapContext } from "@/lib/score";
 import { fmtClock, fmtRelative } from "@/lib/time";
 import type {
   Badge,
@@ -82,11 +82,11 @@ interface CompRow {
   status: string;
 }
 
-type MemberRow = { team_id: string; competition_id: string; field: Field; points: number };
+type MemberRow = { team_id: string; competition_id: string; field: Field; points: number; commits: number | null; league: Level | null };
 
 /** Kullanıcının takımları ve yarışmaları. */
 async function teamsOf(userId: string) {
-  const mine = must(await db().from("team_members").select("team_id, competition_id, field, points").eq("user_id", userId), "takımlar") as MemberRow[];
+  const mine = must(await db().from("team_members").select("team_id, competition_id, field, points, commits, league").eq("user_id", userId), "takımlar") as MemberRow[];
   if (!mine.length) return { mine, comps: [] as CompRow[] };
   const comps = must(await db().from("competitions").select("id, code, title, status").in("id", mine.map((m) => m.competition_id)), "yarışma") as CompRow[];
   return { mine, comps };
@@ -114,7 +114,7 @@ export async function syncScore(userId: string): Promise<MeScore> {
     db().from("projects").select(PROJECT_COLS).eq("user_id", userId),
     db().from("certificates").select("id, name, provider, link, issued_on, status, points").eq("user_id", userId),
     db().from("approvals").select(APPROVAL_COLS).eq("user_id", userId),
-    db().from("peer_ratings").select("competition_id, stars, from_user").eq("to_user", userId),
+    db().from("peer_ratings").select("competition_id, stars, from_league").eq("to_user", userId),
     db().from("roadmaps").select("*").eq("user_id", userId).maybeSingle(),
     db().from("applications").select("competition_id, field").eq("user_id", userId),
     db().from("peer_ratings").select("team_id").eq("from_user", userId),
@@ -140,22 +140,20 @@ export async function syncScore(userId: string): Promise<MeScore> {
   // Yarışmalar: sadece tamamlananların kişisel puanı. Akran ve mentor puanı da tamamlananlardan.
   const completed = t.comps.filter((c) => c.status === "Tamamlandı");
   const compById = new Map(t.comps.map((c) => [c.id, c]));
-  const peerRows = must(peer, "akran") as { competition_id: string; stars: number; from_user: string }[];
-  const byComp = new Map<string, { stars: number; from: string }[]>();
-  for (const r of peerRows) byComp.set(r.competition_id, [...(byComp.get(r.competition_id) ?? []), { stars: r.stars, from: r.from_user }]);
+  // Akran ve mentor puanı sadece o yarışmada commit'i olan üyeye (hiç kod yazmayan yıldızla puan toplayamaz).
+  const memberOf = new Map(t.mine.map((m) => [m.competition_id, m]));
+  const peerRows = (must(peer, "akran") as { competition_id: string; stars: number; from_league: Level | null }[]).filter(
+    (r) => compById.get(r.competition_id)?.status === "Tamamlandı" && (memberOf.get(r.competition_id)?.commits ?? 0) > 0,
+  );
+  const byComp = new Map<string, { stars: number; fromLeague: Level | null }[]>();
+  for (const r of peerRows) byComp.set(r.competition_id, [...(byComp.get(r.competition_id) ?? []), { stars: r.stars, fromLeague: r.from_league }]);
 
-  // Mentor puanı: Orta / Kıdemli üye, takımındaki Yeni başlayanlardan ortalama 4+ yıldız aldıysa.
+  // Mentor puanı: yarışma anında Orta / Kıdemli olan üye, takımındaki Yeni başlayanlardan ortalama 4+ yıldız aldıysa.
+  // Ligler takıma girildiği an saklanır (team_members.league, peer_ratings.from_league; migration 0006, 0007).
   const mentor: { competitionId: string; code: string }[] = [];
-  if (p.league !== "Yeni başlayan" && byComp.size) {
-    const raters = [...new Set(peerRows.map((r) => r.from_user))];
-    const leagues = new Map(
-      ((await db().from("profiles").select("id, league").in("id", raters)).data as { id: string; league: Level }[] | null ?? []).map((r) => [r.id, r.league]),
-    );
-    for (const [cid, list] of byComp) {
-      const fromNew = list.filter((x) => leagues.get(x.from) === "Yeni başlayan");
-      if (compById.get(cid)?.status === "Tamamlandı" && fromNew.length && fromNew.reduce((a, x) => a + x.stars, 0) / fromNew.length >= MENTOR_MIN_STARS)
-        mentor.push({ competitionId: cid, code: compById.get(cid)!.code });
-    }
+  for (const [cid, list] of byComp) {
+    const ratings = list.flatMap((x) => (x.fromLeague ? [{ stars: x.stars, fromLeague: x.fromLeague }] : []));
+    if (mentorEarned(memberOf.get(cid)?.league ?? p.league, ratings)) mentor.push({ competitionId: cid, code: compById.get(cid)!.code });
   }
 
   const items = scoreItems({
@@ -163,7 +161,7 @@ export async function syncScore(userId: string): Promise<MeScore> {
     certs: certRows.map((c) => ({ id: c.id, name: c.name, provider: c.provider, points: c.points })),
     approvals: approvalRows.map((a) => ({ id: a.id, targetId: a.target_id, answeredAt: a.answered_at, label: a.target_label, approverName: a.approver_name, status: a.status, points: a.points })),
     competitions: completed.map((c) => ({ id: c.id, code: c.code, title: c.title, points: t.mine.find((m) => m.competition_id === c.id)?.points ?? 0 })),
-    peer: [...byComp].filter(([cid]) => compById.get(cid)?.status === "Tamamlandı").map(([cid, list]) => ({ competitionId: cid, code: compById.get(cid)!.code, stars: list.map((x) => x.stars) })),
+    peer: [...byComp].map(([cid, list]) => ({ competitionId: cid, code: compById.get(cid)!.code, stars: list.map((x) => x.stars) })),
     mentor,
     // Anahtar adımın türü: her tür (proje ekle, hakkında yaz...) kullanıcı başına bir kez puan verir. Yol haritasını
     // yenileyip (ya da hedefi değiştirip) aynı adımı yeniden tamamlamak puan getirmez.
@@ -241,7 +239,7 @@ export async function loadMe(userId: string, email: string): Promise<MeData> {
   type Msg = { id: number; conversation_id: string; sender_id: string; text: string; created_at: string };
   type TMsg = { id: number; team_id: string; user_id: string | null; text: string; created_at: string };
   const connIds = (must(conns, "bağlantı") as { other_id: string }[]).map((c) => c.other_id);
-  const pin = must(peerIn, "akran") as { from_user: string; competition_id: string; stars: number; note: string | null }[];
+  const pin = must(peerIn, "akran") as { from_user: string | null; competition_id: string; stars: number; note: string | null }[];
   const pout = must(peerOut, "akran") as { team_id: string; to_user: string; stars: number }[];
   const messages = must(msgs, "mesaj") as Msg[];
   const tmessages = must(teamMsgs, "takım mesajı") as TMsg[];

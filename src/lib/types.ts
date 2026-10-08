@@ -221,6 +221,8 @@ export interface TeamMember {
   field: Field;
   /** Yarışma tamamlandıysa kişisel puan */
   points?: number;
+  /** Yarışma tamamlandıysa commit sayısı; 0 ise akran puanı alamaz */
+  commits?: number;
 }
 
 export interface Team {

@@ -7,6 +7,7 @@ import {
   qualityLabel,
   qualityPoints,
   qualityScore,
+  mentorEarned,
   referencePoints,
   scoreItems,
   snakeDraft,
@@ -61,6 +62,12 @@ eq("Kalite: ölçülemeyen lint/audit yarım", qualityScore({ lighthouse: null, 
 eq("Akran: 4.5 ortalama → 27", peerPointsFor([5, 4]), 27);
 eq("Onay: kurumsal + yorum 35", referencePoints("a@firma.com.tr", true), 35);
 eq("Onay: kişisel e-posta 10", referencePoints("a@gmail.com", false), 10);
+eq("Onay: kendi alan adı da kurumsal sayılır (bilinen açık)", referencePoints("ali@benimsirketim.com", false), 30);
+eq("Mentor: Orta, Yeni başlayanlardan 4 ve 5 → hak eder", mentorEarned("Orta", [{ stars: 4, fromLeague: "Yeni başlayan" }, { stars: 5, fromLeague: "Yeni başlayan" }]), true);
+eq("Mentor: ortalama 3.5 → yok", mentorEarned("Kıdemli", [{ stars: 3, fromLeague: "Yeni başlayan" }, { stars: 4, fromLeague: "Yeni başlayan" }]), false);
+eq("Mentor: sadece Yeni başlayanların yıldızı sayılır", mentorEarned("Orta", [{ stars: 5, fromLeague: "Yeni başlayan" }, { stars: 1, fromLeague: "Orta" }]), true);
+eq("Mentor: takımda Yeni başlayan puanlamadıysa yok", mentorEarned("Orta", [{ stars: 5, fromLeague: "Orta" }]), false);
+eq("Mentor: mentor yarışmada Yeni başlayan idiyse yok", mentorEarned("Yeni başlayan", [{ stars: 5, fromLeague: "Yeni başlayan" }]), false);
 const BTK = "https://www.btkakademi.gov.tr/portal/certificate/validate?certificateId=AB12CD";
 const CREDLY = "https://www.credly.com/badges/9736D207-a0c4-4a24-88e2-2f1e7fb34310/public_url";
 eq("Sertifika: BTK numarası", btkCertId(BTK), "AB12CD");
