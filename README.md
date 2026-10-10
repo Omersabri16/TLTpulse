@@ -35,7 +35,6 @@
 15. [Testler](#15-testler)
 16. [Kurulum (yerelde çalıştırma)](#16-kurulum-yerelde-çalıştırma)
 17. [Klasör yapısı](#17-klasör-yapısı)
-18. [Bilinen sınırlar](#18-bilinen-sınırlar)
 
 ---
 
