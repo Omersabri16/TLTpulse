@@ -481,19 +481,5 @@ supabase/migrations/      veritabanı şeması (0001–0007)
 scripts/                  setup, seed, e2e, birim testleri
 ```
 
-## 18. Bilinen sınırlar
-
-Dürüst olmak için, bildiğimiz açıklar:
-
-- Projede boş bir test dosyası + yeşil CI de 12 kalite puanı alır; testlerin içeriği ölçülmüyor.
-- Dışarıdan alınıp parça parça commit edilen kodu içe aktarılmış kod kuralı %100 yakalayamaz (sadece zahmetini artırır).
-- Şablon tespiti 3+ kullanıcı istiyor; sistem yeniyken bazı şablon dosyaları "kendi dosyan" sayılabilir.
-- Onaylayıcının gerçekten amir / hoca olduğu doğrulanmıyor; kurumsal e-posta tespiti "bilinen kişisel sağlayıcı değil mi" kontrolü. Onaylayıcının alan adı profilde herkese açık göründüğü için göze batar.
-- Kişisel yarışma puanı commit sayısına bakar, commit'in büyüklüğüne bakmaz.
-- Yerli iOS / Android uygulama dışarıdan test edilemediği için mobil şartname PWA.
-- Gemini ücretsiz katmanında model başına günlük sınır düşük; yoğunlukta proje analizi "bekliyor"a düşer ve sonra tamamlanır.
-- TLTpulse sertifikası (Certifier entegrasyonu) kodda hazır ama şimdilik kapalı.
-
----
 
 <p align="center">TLTpulse · RHINOTRON8 · 2026</p>
